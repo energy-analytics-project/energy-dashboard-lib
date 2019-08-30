@@ -1,3 +1,7 @@
+import os
+import logging
+from edl.resources import filesystem
+
 def update(generator, state_file):
     for item in generator:
         with open(state_file, "a") as f:
@@ -12,7 +16,7 @@ def new_files(resource_name, state_file, path, ending):
     if os.path.exists(state_file):
         with open(state_file, 'r') as m:
             processed_file_set = set([l.rstrip() for l in m])
-    all_file_set = set(glob_dir(path, ending))
+    all_file_set = set(filesystem.glob_dir(path, ending))
     new_file_set = all_file_set - processed_file_set
     logging.info({
         "src":resource_name, 

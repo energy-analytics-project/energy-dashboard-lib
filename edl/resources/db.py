@@ -1,3 +1,7 @@
+import os
+import logging
+import sqlite3
+
 def insert(resource_name, db_dir, db_name, ddl_create, sql_insert, filename_entry_tuples):
     cnx = initdb(resource_name, os.path.join(db_dir, db_name), ddl_create)
     with cnx:
@@ -20,23 +24,23 @@ def insert(resource_name, db_dir, db_name, ddl_create, sql_insert, filename_entr
                     "msg":"insert failed"
                     })
 
-def initdb(resource_name, fqp_db, ddl_create):
+def initdb(resource_name, db, ddl_create):
     logging.debug({
         "src":resource_name, 
         "action":"initdb",
-        "db_path":db_path
+        "db_path":db
         })
     try:
-        conn = sqlite3.connect(fqp_db)
+        conn = sqlite3.connect(db)
         c = conn.cursor()
         c.execute(ddl_create)
         conn.commit()
         return conn
     except Exception as e:
-        logging.debug({
+        logging.error({
             "src":resource_name, 
             "action":"initdb",
-            "db_path":fqp_db,
+            "db_path":db,
             "error":e,
             "msg":"failed to open database"
             })
