@@ -11,6 +11,7 @@ import pdb
 import pprint
 import sys
 import xmltodict
+import uuid
 
 class WalkerState():
     def __init__(self, meta=None, dict_handler_func=None, list_handler_func=None, item_handler_func=None, name_handler_func=None):
@@ -247,7 +248,7 @@ class XML2SQLTransormer():
         state0 = WalkerState(
                 meta={
                     'table_columns':{}, 
-                    'sql_types':{'id': SqlTypeEnum.INTEGER}, 
+                    'sql_types':{'id': SqlTypeEnum.TEXT}, 
                     'table_relations':{}},
                 name_handler_func=self._clean,
                 dict_handler_func=handle_dict,
@@ -263,7 +264,83 @@ class XML2SQLTransormer():
         return self._generate_sql_ddl(self.table_columns, self.sql_types, self.table_relations, primary_key_exclusions)
 
     def insertion_sql(self):
-        return []
+        """
+        Recursive Scan to walk the assembled databases and database relationships and
+        create insertion entries for each table.
+        """
+        assert self.json is not None
+
+        def sql(name, columns, values):
+            return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
+
+        def handle_dict(obj, name, path, ws):
+            table_columns                   = ws.meta['table_columns']
+            table_relations                 = ws.meta['table_relations']
+            sql_types                       = ws.meta['sql_types']
+            prev_table                      = ws.meta['prev_table']
+            prev_table_last_insert_id       = ws.meta['prev_table_last_insert_id']
+            prev_table_columns_and_values   = ws.meta['prev_table_columns_and_values']
+
+            prev_columns                    = []
+            prev_values                     = []
+            columns                         = sorted([c for c in table_columns[name] if c in sql_types])
+            values                          = []
+
+            if prev_table_last_insert_id != None:
+                prev_columns                = ["%s_id" % prev_table]
+                prev_values                 = prev_table_last_insert_id
+                prev_table_last_insert_id   = None
+            else:
+                for c in sorted([ws.name_handler_func(k) for k in prev_table_columns_and_values.keys()]):
+                    prev_columns.append("%s_%s" % (prev_table, c))
+                    prev_values.append(c)
+
+            if len(columns) == 0:
+                guid = str(uuid.uuid4())
+                columns.append('id')
+                values.append(guid)
+                prev_table_last_insert_id = guid
+            else:
+                for c in columns:
+                    if c in obj:
+                        values.append(obj[c])
+                    elif c.upper() in obj:
+                        values.append(obj[c.upper()])
+                    else:
+                        pass
+#                        logging.error({
+#                            "table":name, 
+#                            "action":"handle_dict", 
+#                            "field":c,
+#                            "object": [ws.name_handler_func(k) for k in prev_table_columns_and_values.keys()], 
+#                            "error" : "missing field"})
+   
+            
+            # create a dict of the valid columns and values
+            ws.meta['prev_table_columns_and_values'] = dict(zip(columns, values))
+
+            # add parent table (foreign key col and vals)
+            columns.extend(prev_columns)
+            values.extend(prev_values)
+
+            ws.meta['insert_sql'].append(sql(name, columns, values))
+            ws.meta['prev_table'] = name
+            return ws
+
+        state0 = WalkerState(
+                meta={
+                    'insert_sql': [],
+                    'prev_table':None,
+                    'prev_table_last_insert_id':None,
+                    'prev_table_columns_and_values':{},
+                    'table_columns':self.table_columns, 
+                    'sql_types':self.sql_types, 
+                    'table_relations':self.table_relations},
+                name_handler_func=self._clean,
+                dict_handler_func=handle_dict,
+                )
+        state1 = walk_object(self.json, self.root, [], state0)
+        return state1.meta['insert_sql']
 
     def query_sql(self):
         return []
@@ -297,8 +374,6 @@ class XML2SQLTransormer():
             return None
         return parent
 
-    def _insert_or_ignore_sql(self, table_name, columns, values):
-        return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=table_name, columns=columns, values=values)
 
     def _generate_sql_ddl(self, xtable_columns, sql_types, table_relations, primary_key_exclusions):
         """
@@ -334,7 +409,6 @@ class XML2SQLTransormer():
             # item table with a synthetic field added below...
             if len(cols) == 0:
                 # Table has no columns, so insert a synthetic column.
-                # But, there is no need to make this autoincrement, see: https://sqlite.org/autoinc.html.
                 cols = cols + ['id']
                 table_columns[tbl] = cols
 
@@ -386,5 +460,5 @@ if __name__ == "__main__":
             print(ddl)
         for insert_sql in xst.insertion_sql():
             print(insert_sql)
-        for query_sql in xst.query_sql():
-            print(query_sql)
+#        for query_sql in xst.query_sql():
+#            print(query_sql)
