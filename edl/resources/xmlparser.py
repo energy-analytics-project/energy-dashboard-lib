@@ -62,7 +62,7 @@ def sql_type_str(e):
     if e == SqlTypeEnum.BLOB: return "BLOB"
 
 
-class XmlParser():
+class XML2SQLTransormer():
     """
     OASIS Reports have the following nested structure:
 
@@ -133,8 +133,23 @@ class XmlParser():
         Following 'Elegant Objects' style, constructor only sets vars. All
         work is delayed until needed.
         """
-        self.xmlfile    = xmlfile
-        self.json       = None
+        self.xmlfile            = xmlfile
+        """xmlfile : file obect""" 
+
+        self.json               = None
+        """json : json object (typically a dict) resulting from parsing the xmlfile object"""
+
+        self.sql_types          = None
+        """sql_types : map of xml element names to sqlite3 value types"""
+
+        self.table_columns      = None
+        """table_columns : list of columns tuples of (column name, column type)"""
+
+        self.table_relations    = None
+        """table_relations : map of table names to a list of parent tables"""
+
+        self.root               = 'root'
+        """root : name of the root node which is really the document root, for which no table is generated"""
 
     def parse(self):
         """
@@ -144,15 +159,37 @@ class XmlParser():
         # allow method chaining
         return self
 
-    def clean(self, s):
+    def transform(self):
+        assert self.json is not None
+        (self.table_columns, self.sql_types, self.table_relations) =    \
+                self._recursive_scan(                                   \
+                        obj=self.json,                                  \
+                        obj_name=self.root,                             \
+                        path=[],                                        \
+                        table_columns={},                               \
+                        sql_types={'id': SqlTypeEnum.INTEGER},          \
+                        table_relations={})
+        # allow method chaining
+        return self
+
+    def creation_ddl(self, primary_key_exclusions=['value']):
+        return self._generate_sql_ddl(self.table_columns, self.sql_types, self.table_relations, primary_key_exclusions)
+
+    def insertion_sql(self):
+        return []
+
+    def query_sql(self):
+        return []
+
+    def _clean(self, s):
         """
         Remove wonky characters from XML attributes, like '@xmlns'.
         """
         return re.sub('[^a-zA-Z0-9_]', '', s).lower()
 
-    def recursive_table_columns(self, obj=None, obj_name='root', path=[], table_columns={}, sql_types={'id': SqlTypeEnum.INTEGER}, table_relations={}):
+    def _recursive_scan(self, obj, obj_name, path, table_columns, sql_types, table_relations):
         """
-        Recursive XML Scan to assemble the databases and database relationships. For
+        Recursive Scan to assemble the databases and database relationships. For
         example, in the XML snippet above we have the following relationships:
 
             OASISReport -> MessageHeader -> [TimeDate, Source, Version]
@@ -172,7 +209,7 @@ class XmlParser():
         that re-running the insertions is idempotent, once inserted, no new records are inserted.
 
         :param obj:             json object to be inspected, defaults to self.json
-        :param obj_name:        name of the object, defaults to 'root' for the document root
+        :param obj_name:        name of the object
         :param table_columns:   contains the list of columns for a given table
         :param sql_types:       contains the SqlTypeEnum for each of the found columns from all the table_columns
         :param table_relations: contains the parent-child relationship for each table
@@ -180,24 +217,22 @@ class XmlParser():
 
         See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
         """
-        if obj == None:
-            obj = self.json
-        name = self.clean(obj_name)
+        name = self._clean(obj_name)
         if isinstance(obj, dict):
-            table_columns[name] = [self.clean(k) for k in obj.keys()]
+            table_columns[name] = [self._clean(k) for k in obj.keys()]
             table_relations[name] = path
             for k, v in obj.items():
-                (table_columns, sql_types, table_relations) = self.recursive_table_columns(v, self.clean(k), path + [name], table_columns, sql_types, table_relations)
+                (table_columns, sql_types, table_relations) = self._recursive_scan(v, self._clean(k), path + [name], table_columns, sql_types, table_relations)
         elif isinstance(obj, list):
             for idx, item in enumerate(obj):
-                (table_columns, sql_types, table_relations) = self.recursive_table_columns(item, name, path + [name], table_columns, sql_types, table_relations)
+                (table_columns, sql_types, table_relations) = self._recursive_scan(item, name, path + [name], table_columns, sql_types, table_relations)
         else:
             if name not in sql_types:
                 sql_types[name] = SqlTypeEnum.type_of(obj)
         return (table_columns, sql_types, table_relations)
 
 
-    def gen_primary_key(self, table_name, table_columns, sql_types, primary_key_exclusions):
+    def _gen_primary_key(self, table_name, table_columns, sql_types, primary_key_exclusions):
         """
         Return a primary key for the given table. The primary key is composed of all the 
         columns not explicitly excluded, that are also present in the sql_types.
@@ -205,28 +240,26 @@ class XmlParser():
         return [c for c in table_columns[table_name] if c not in primary_key_exclusions and c in sql_types]
 
 
-    def find_parent_table(self, table_name, table_relations, table_columns):
+    def _find_parent_table(self, table_name, table_relations, table_columns):
         """
         There's been some wonkiness in the path, where 'report_item' was stored multiple times in the
         path, resulting in an infinite loop.
-
-        TODO: refactor this crap code
         """
-        if table_name == 'root':
+        if table_name == self.root:
             return None
         path = table_relations[table_name]
         parent = path.pop()
         while parent == table_name:
             parent = path.pop()
-        if parent == 'root':
+        if parent == self.root:
             return None
         return parent
 
 
-    def generate_sql_ddl(self, table_columns, sql_types, table_relations, primary_key_exclusions):
+    def _generate_sql_ddl(self, xtable_columns, sql_types, table_relations, primary_key_exclusions):
         """
-
-        TODO: refactor this crap code
+        Generate the SQL DDL to create the tables with the foreign key relationships as described
+        by: table_columns sql_types table_relations and primary_key_exclusions, all defined on this class.
         """
         
         def gen_foreign_key_constraints_ddl(parent_table, parent_table_primary_keys):
@@ -235,65 +268,79 @@ class XmlParser():
                     parent_table, 
                     ", ".join(parent_table_primary_keys))
 
-        # 'root' is an artifact, not needed now
-        del table_columns['root']
+        # As mentioned earlier, the root node maps to the xml document root, which is does not
+        # map to a table that needs to be created. This is just an artifact of the recursive
+        # scan that can be removed now. Modify a local copy.
+        table_columns = xtable_columns.copy() 
+        del table_columns[self.root]
 
-        # iterate over the tables
+        # Iterate over the tables
         for tbl,cols in table_columns.items():
-            # filter out columns that are not in sql_types
+
+            # Filter out columns that are not in sql_types. Practically, this is filtering
+            # out the forward references in the XML to child elements that will be expressed
+            # in the DDL as back references, e.g. foreign keys to a parent table.
             cols = [c for c in cols if c in sql_types] 
+
+            # For those XML elements that have no data, the length of the columns will be zero.
+            # However, these table relationships must be maintained, especially since the tables
+            # and their relationships are auto-generated. The classic example of this is in the
+            # OASIS XML feeds REPORT_ITEM -> {REPORT_HEADER, REPORT_DATA}. There must be a way
+            # to maintain the relationship of the header to the data, and that's done via the
+            # item table with a synthetic field added below...
             if len(cols) == 0:
-                # insert a synthetic column
-                # no need to make this autoincrement, see: https://sqlite.org/autoinc.html
+                # Table has no columns, so insert a synthetic column.
+                # But, there is no need to make this autoincrement, see: https://sqlite.org/autoinc.html.
                 cols = cols + ['id']
                 table_columns[tbl] = cols
 
-            # foreign keys etc. as lists to make the ",".join() operations nicer
+            # Foreign keys etc. represented as lists to make the ",".join() operations nicer later.
             foreign_key_constraints             = []
             fk_column_sql_types                 = []
             column_sql_types                    = []
 
-            # recursively find a parent table in order to maintain the back reference via the foreign key
-            parent_table = self.find_parent_table(tbl, table_relations, table_columns)
+            # Recursively find a parent table in order to maintain the back reference via the foreign key.
+            parent_table = self._find_parent_table(tbl, table_relations, table_columns)
 
-            # the only table that will not have a back reference is the top level table that points at 'root'.
+            # The only table that will not have a back reference is the top level table named self.root.
             if parent_table != None:
-                # re-generate the parent table's primary keys. we need this b/c the generation of a
+                # Re-generate the parent table's primary keys. we need this b/c the generation of a
                 # foreign key in the child table requires all the parent tables primary keys.
                 # See: https://sqlite.org/foreignkeys.html
-                parent_table_primary_keys = self.gen_primary_key(parent_table, table_columns, sql_types, primary_key_exclusions)
+                parent_table_primary_keys = self._gen_primary_key(parent_table, table_columns, sql_types, primary_key_exclusions)
            
-                # append the foreign key constraints (for the child table) to a list to make joining easier
+                # Generate the foreign key constrants on 'this' table by passing in the 'parent' table and it's primary keys.
                 foreign_key_constraints.append(gen_foreign_key_constraints_ddl(parent_table, parent_table_primary_keys))
 
-                # generate the sql types for the parent table primary key columns
+                # Express the sql types for the parent table's primary key columns
                 for fpk in parent_table_primary_keys:
                     fk_column_sql_types.append("%s_%s %s" % (parent_table, fpk, sql_type_str(sql_types[fpk])))
 
-            # generate the column definitions for the child table
+            # Express the column definitions for 'this' table
             for col in cols:
                 if col in sql_types:
                     column_sql_types.append("%s %s" % (col, sql_type_str(sql_types[col])))
                    
-            # child table primary key definition
-            primary_key_def = ", ".join(self.gen_primary_key(tbl, table_columns, sql_types, primary_key_exclusions))
+            # Express the primary key definition for 'this' table
+            primary_key_def = ", ".join(self._gen_primary_key(tbl, table_columns, sql_types, primary_key_exclusions))
             
-            # generate the column definitions for the child table, including all the column definitions needed for the
-            # foreign key relations.
+            # Concatenate column definitions for 'this' table, including all the column definitions needed for the
+            # foreign key relations to the 'parent' table.
             column_sql_types.extend(fk_column_sql_types)
             column_sql_types.extend(foreign_key_constraints)
             combined_key_def = ", ".join(column_sql_types)
 
-            # expand the whole enchillada
-            # TODO: should/could I have used Jinja2 templating for this mess?
+            # Done
             yield "CREATE TABLE IF NOT EXISTS %s (%s, PRIMARY KEY (%s));" % (tbl, combined_key_def, primary_key_def)
 
 
 if __name__ == "__main__":
     infile = sys.argv[1]
     with open(infile, 'r') as f:
-        p = XmlParser(f).parse()
-        (tables, types, tablemap) = p.recursive_table_columns()
-        ddls = p.generate_sql_ddl(tables, types, tablemap, ['value'])
-        for ddl in ddls:
+        xst = XML2SQLTransormer(f).parse().transform()
+        for ddl in xst.creation_ddl(['value']):
             print(ddl)
+        for insert_sql in xst.insertion_sql():
+            print(insert_sql)
+        for query_sql in xst.query_sql():
+            print(query_sql)
