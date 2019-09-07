@@ -12,6 +12,42 @@ import pprint
 import sys
 import xmltodict
 
+class WalkerState():
+    def __init__(self, meta=None, dict_handler_func=None, list_handler_func=None, item_handler_func=None, name_handler_func=None):
+        def default_dict_handler_func(obj, name, path, state):
+            return state
+        def default_list_handler_func(obj, name, path, state):
+            return state
+        def default_item_handler_func(obj, name, path, state):
+            return state
+        def default_name_handler_func(name):
+            return name
+        self.meta = meta or {}
+        self.dict_handler_func = dict_handler_func or default_dict_handler_func
+        self.list_handler_func = list_handler_func or default_list_handler_func
+        self.item_handler_func = item_handler_func or default_item_handler_func
+        self.name_handler_func = name_handler_func or default_name_handler_func
+
+def walk_object(obj, name, path, state):
+    """
+    Walk object tree and inkoke handlers based on object type (dict, list, or item).
+    """
+    name = state.name_handler_func(name)
+    if isinstance(obj, dict):
+        # obj is dict
+        state = state.dict_handler_func(obj, name, path, state)
+        for k, v in obj.items():
+            state = walk_object(v, k, path + [name], state)
+    elif isinstance(obj, list):
+        # obj is list
+        state = state.list_handler_func(obj, name, path, state)
+        for idx, item in enumerate(obj):
+            state = walk_object(item, name, path + [name], state)
+    else:
+        # obj is neither dict or list
+        state = state.item_handler_func(obj, name, path, state)
+    return state
+
 class SqlTypeEnum(Enum):
     """
     Convert datatypes found in XML into Sqlite3 datatypes:
@@ -106,7 +142,7 @@ class XML2SQLTransormer():
 
         Running this tooling on an XML file generates the DDL create table statements necessary:
 
-        $ python energy-dashboard-lib/edl/resources/xmlparser.py ./20180224_20180225_AS_MILEAGE_CALC_N_20190809_08_27_07_v1.xml
+        $ ./energy-dashboard-lib/edl/resources/xmlparser.py 20180224_20180225_AS_MILEAGE_CALC_N_20190809_08_27_07_v1.xml
 
         CREATE TABLE IF NOT EXISTS oasisreport (xmlns TEXT, PRIMARY KEY (xmlns));
         CREATE TABLE IF NOT EXISTS messageheader (timedate TEXT, source TEXT, version TEXT, oasisreport_xmlns TEXT, FOREIGN KEY (oasisreport_xmlns) REFERENCES oasisreport(xmlns), PRIMARY KEY (timedate, source, version));
@@ -116,6 +152,7 @@ class XML2SQLTransormer():
         CREATE TABLE IF NOT EXISTS report_header (system TEXT, tz TEXT, report TEXT, uom TEXT, interval TEXT, sec_per_interval INTEGER, report_item_id INTEGER, FOREIGN KEY (report_item_id) REFERENCES report_item(id), PRIMARY KEY (system, tz, report, uom, interval, sec_per_interval));
         CREATE TABLE IF NOT EXISTS report_data (data_item TEXT, resource_name TEXT, opr_date TEXT, interval_num INTEGER, interval_start_gmt TEXT, interval_end_gmt TEXT, value REAL, report_item_id INTEGER, FOREIGN KEY (report_item_id) REFERENCES report_item(id), PRIMARY KEY (data_item, resource_name, opr_date, interval_num, interval_start_gmt, interval_end_gmt));
         CREATE TABLE IF NOT EXISTS disclaimer_item (disclaimer TEXT, rto_name TEXT, FOREIGN KEY (rto_name) REFERENCES rto(name), PRIMARY KEY (disclaimer));
+
 
     Example:
 
@@ -160,15 +197,65 @@ class XML2SQLTransormer():
         return self
 
     def transform(self):
+        """
+        Recursive Scan to assemble the databases and database relationships. For
+        example, in the XML snippet above we have the following relationships:
+
+            OASISReport -> MessageHeader -> [TimeDate, Source, Version]
+            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_HEADER -> [...]
+            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_DATA -> [...]
+
+        These relationships are represented as FOREIGN KEY references to the 'parent' table.
+        This is especially important in the case of the REPORT_HEADER and REPORT_DATA both
+        pointing to the empty REPORT_ITEM. If REPORT_ITEM did not exist in the schema, then
+        there would be no way to correlate the REPORT_HEADER and the REPORT_DATA.
+
+        Table_columns without any columns have an 'id INTEGER' column injected into them. table_columns with columns
+        do not.
+
+        Primary keys are constructed from all of the available columns, sans those provided in the
+        'primary_key_exclusions' parameter. Primary keys are used for data integrity. It is important
+        that re-running the insertions is idempotent, once inserted, no new records are inserted.
+
+        :param obj:             json object to be inspected, defaults to self.json
+        :param obj_name:        name of the object
+        :param table_columns:   contains the list of columns for a given table
+        :param sql_types:       contains the SqlTypeEnum for each of the found columns from all the table_columns
+        :param table_relations: contains the parent-child relationship for each table
+        :returns: (table_columns, sql_types, table_relations)
+
+        See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
+        """
         assert self.json is not None
-        (self.table_columns, self.sql_types, self.table_relations) =    \
-                self._recursive_scan(                                   \
-                        obj=self.json,                                  \
-                        obj_name=self.root,                             \
-                        path=[],                                        \
-                        table_columns={},                               \
-                        sql_types={'id': SqlTypeEnum.INTEGER},          \
-                        table_relations={})
+
+        def handle_dict(obj, name, path, ws):
+            table_columns   = ws.meta['table_columns']
+            table_relations = ws.meta['table_relations']
+            if name not in table_columns:
+                table_columns[name] = []
+            table_columns[name].extend(set([ws.name_handler_func(k) for k in obj.keys()]) - set(table_columns[name]))
+            if name not in table_relations:
+                table_relations[name] = path
+            return ws
+
+        def handle_item(obj, name, path, ws):
+            sql_types       = ws.meta['sql_types']
+            if name not in sql_types:
+                sql_types[name] = SqlTypeEnum.type_of(obj)
+            return ws
+
+        state0 = WalkerState(
+                meta={
+                    'table_columns':{}, 
+                    'sql_types':{'id': SqlTypeEnum.INTEGER}, 
+                    'table_relations':{}},
+                name_handler_func=self._clean,
+                dict_handler_func=handle_dict,
+                item_handler_func=handle_item)
+        state1 = walk_object(self.json, self.root, [], state0)
+        self.table_columns      = state1.meta['table_columns']
+        self.sql_types          = state1.meta['sql_types']
+        self.table_relations    = state1.meta['table_relations']
         # allow method chaining
         return self
 
@@ -186,51 +273,6 @@ class XML2SQLTransormer():
         Remove wonky characters from XML attributes, like '@xmlns'.
         """
         return re.sub('[^a-zA-Z0-9_]', '', s).lower()
-
-    def _recursive_scan(self, obj, obj_name, path, table_columns, sql_types, table_relations):
-        """
-        Recursive Scan to assemble the databases and database relationships. For
-        example, in the XML snippet above we have the following relationships:
-
-            OASISReport -> MessageHeader -> [TimeDate, Source, Version]
-            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_HEADER -> [...]
-            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_DATA -> [...]
-
-        These relationships are represented as FOREIGN KEY references to the 'parent' table.
-        This is especially important in the case of the REPORT_HEADER and REPORT_DATA both
-        pointing to the empty REPORT_ITEM. If REPORT_ITEM did not exist in the schema, then
-        there would be no way to correlate the REPORT_HEADER and the REPORT_DATA.
-
-        table_columns without any columns have an 'id INTEGER' column injected into them. table_columns with columns
-        do not.
-
-        Primary keys are constructed from all of the available columns, sans those provided in the
-        'primary_key_exclusions' parameter. Primary keys are used for data integrity. It is important
-        that re-running the insertions is idempotent, once inserted, no new records are inserted.
-
-        :param obj:             json object to be inspected, defaults to self.json
-        :param obj_name:        name of the object
-        :param table_columns:   contains the list of columns for a given table
-        :param sql_types:       contains the SqlTypeEnum for each of the found columns from all the table_columns
-        :param table_relations: contains the parent-child relationship for each table
-        :returns: (table_columns, sql_types, table_relations)
-
-        See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
-        """
-        name = self._clean(obj_name)
-        if isinstance(obj, dict):
-            table_columns[name] = [self._clean(k) for k in obj.keys()]
-            table_relations[name] = path
-            for k, v in obj.items():
-                (table_columns, sql_types, table_relations) = self._recursive_scan(v, self._clean(k), path + [name], table_columns, sql_types, table_relations)
-        elif isinstance(obj, list):
-            for idx, item in enumerate(obj):
-                (table_columns, sql_types, table_relations) = self._recursive_scan(item, name, path + [name], table_columns, sql_types, table_relations)
-        else:
-            if name not in sql_types:
-                sql_types[name] = SqlTypeEnum.type_of(obj)
-        return (table_columns, sql_types, table_relations)
-
 
     def _gen_primary_key(self, table_name, table_columns, sql_types, primary_key_exclusions):
         """
@@ -255,6 +297,8 @@ class XML2SQLTransormer():
             return None
         return parent
 
+    def _insert_or_ignore_sql(self, table_name, columns, values):
+        return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=table_name, columns=columns, values=values)
 
     def _generate_sql_ddl(self, xtable_columns, sql_types, table_relations, primary_key_exclusions):
         """
