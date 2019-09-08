@@ -3,6 +3,7 @@ filesystem.py : compute things like filenames
 """
 
 import os
+import pdb
 
 BAD_S3_CHARS = ['&', '@', ':', ',', '$', '=', '+', '?', ';', ' ', '\\', '^', '>', '<', '{', '}', '[', ']', '%', '~', '|']
 #PROTOCOLS = ["http://", "https://", "ftp://"]
@@ -21,7 +22,7 @@ COMMON_REPLACEMENTS = [
 ]
 
 def glob_dir(path, ending):
-    """Returns files matching ending (simple glob)"""
+    """Returns files matching ending (simple glob), does NOT DO REGEX"""
     with os.scandir(path) as it:
         for entry in it:
             if entry.is_file() and entry.name.lower().endswith(ending.lower()):

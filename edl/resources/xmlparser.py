@@ -226,10 +226,10 @@ class XML2SQLTransormer():
                 self.sql_types[self.sqlite_sanitize(name)] = sqltype
 
         Walker(item_handler_func=handle_item).walk(self.root, self.json)
-        print("#------------------------")
-        for k,v in self.sql_types.items():
-            print("# types: %s -> %s" % (k,v))
-        print("#------------------------")
+#        print("#------------------------")
+#        for k,v in self.sql_types.items():
+#            print("# types: %s -> %s" % (k,v))
+#        print("#------------------------")
         return self
 
     def scan_tables(self, primary_key_exclusions):
@@ -273,7 +273,7 @@ class XML2SQLTransormer():
             # Table has no columns, so insert a synthetic column. 'id' maps to a TEXT field.
             if len(t.local_columns) == 0:
                 t.local_columns = t.primary_key = ['id']
-                print("# patch: %s" % t)
+                #print("# patch: %s" % t)
             pks = set(t.local_columns) - set(primary_key_exclusions)
             t.primary_key = list(set(t.primary_key).union(pks))
             if len(stack) > 1:
@@ -292,10 +292,10 @@ class XML2SQLTransormer():
             handle_dict_or_list(stack)
 
         Walker(dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
-        print("#------------------------")
-        for k,v in self.tables.items():
-            print("# tables: %s" % v)
-        print("#------------------------")
+#        print("#------------------------")
+#        for k,v in self.tables.items():
+#            print("# tables: %s" % v)
+#        print("#------------------------")
         return self
         
     
@@ -339,13 +339,9 @@ class XML2SQLTransormer():
             return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
        
         def get_kv(keys, obj):
-            try:
-                sortedkeys = sorted(keys)
-                values = [obj[k] for k in sortedkeys]
-                return (sortedkeys, values)
-            except Exception as e:
-                print("keys: %s, e: %s, obj: %s" % (keys, e, obj.keys()))
-                raise e
+            sortedkeys = sorted(keys)
+            values = [obj[k] for k in sortedkeys]
+            return (sortedkeys, values)
 
         def handle_dict(stack):
             (name, obj) = stack[-1]
@@ -440,95 +436,6 @@ class XML2SQLTransormer():
             return None
         return parent
 
-
-#    def insertion_sql(self):
-#        """
-#        Recursive Scan to walk the assembled databases and database relationships and
-#        create insertion entries for each table.
-#        """
-#        assert self.json is not None
-#
-#        def sql(name, columns, values):
-#            s_columns = self.sqlite_sanitize_all(columns)
-#            s_values = self.sqlite_sanitize_values(columns, values)
-#            if name != self.root:
-#                return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(s_columns), values=", ".join(s_values))
-#            else:
-#                return ""
-#
-#        def handle_dict(obj, name, path, ws):
-#            table_columns                   = ws.meta['table_columns']
-#            table_relations                 = ws.meta['table_relations']
-#            sql_types                       = ws.meta['sql_types']
-#            prev_table                      = ws.meta['prev_table']
-#            prev_table_last_insert_id       = ws.meta['prev_table_last_insert_id']
-#            prev_table_columns_and_values   = ws.meta['prev_table_columns_and_values']
-#
-#            prev_columns                    = []
-#            prev_values                     = []
-#            columns                         = sorted([c for c in table_columns[name] if c in sql_types])
-#            values                          = []
-#
-#            if prev_table_last_insert_id != None:
-#                prev_columns                = ["%s_id" % prev_table]
-#                prev_values                 = prev_table_last_insert_id
-#                prev_table_last_insert_id   = None
-#            else:
-#                for c in sorted([ws.name_handler_func(k) for k in prev_table_columns_and_values.keys()]):
-#                    prev_columns.append("%s_%s" % (prev_table, c))
-#                    prev_values.append(prev_table_columns_and_values[c])
-#
-#            if len(columns) == 0 and name != self.root:
-#                guid = str(uuid.uuid4())
-#                columns.append('id')
-#                values.append(guid)
-#                prev_table_last_insert_id = guid
-#            else:
-#                # create a copy of obj but with sanitized keys
-#                obj2 = {}
-#                for k,v in obj.items():
-#                    obj2[self.sqlite_sanitize(k)] = v
-#                for c in columns:
-#                    if c in obj2:
-#                        values.append(obj2[c])
-#                    else:
-#                        pass
-#                        logging.error({
-#                            "table":name, 
-#                            "action":"handle_dict", 
-#                            "field":c,
-#                            "object": [ws.name_handler_func(k) for k in prev_table_columns_and_values.keys()], 
-#                            "error" : "missing field"})
-#   
-#            
-#            # create a dict of the valid columns and values
-#            ws.meta['prev_table_columns_and_values'] = dict(zip(columns, values))
-#
-#            # add parent table (foreign key col and vals)
-#            columns.extend(prev_columns)
-#            values.extend(prev_values)
-#
-#            ws.meta['insert_sql'].append(sql(name, columns, values))
-#            ws.meta['prev_table'] = name
-#            return ws
-#
-#        state0 = WalkerState(
-#                meta={
-#                    'insert_sql': [],
-#                    'prev_table':None,
-#                    'prev_table_last_insert_id':None,
-#                    'prev_table_columns_and_values':{},
-#                    'table_columns':self.table_columns, 
-#                    'sql_types':self.sql_types, 
-#                    'table_relations':self.table_relations},
-#                name_handler_func=self.sqlite_sanitize,
-#                dict_handler_func=handle_dict,
-#                )
-#        state1 = walk_object(self.json, self.root, [], state0)
-#        return state1.meta['insert_sql']
-
-
-
 if __name__ == "__main__":
     infile = sys.argv[1]
     with open(infile, 'r') as f:
@@ -536,6 +443,6 @@ if __name__ == "__main__":
         for d in xst.ddl():
             print(d)
         for sql in xst.insertion_sql():
-           print(sql)
+            print(sql)
 #        for query_sql in xst.query_sql():
 #            print(query_sql)
