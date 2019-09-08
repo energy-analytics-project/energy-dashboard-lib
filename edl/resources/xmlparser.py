@@ -334,8 +334,6 @@ class XML2SQLTransormer():
         retval = []
 
         def sql(name, columns, values):
-            #s_columns = self.sqlite_sanitize_all(columns)
-            #s_values = self.sqlite_sanitize_values(columns, values)
             return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
        
         def get_kv(keys, obj):
@@ -435,6 +433,34 @@ class XML2SQLTransormer():
         if parent == self.root:
             return None
         return parent
+
+def parse(resource_name, input_files, input_dir, output_dir, pk_exclusions):
+    for f in input_files:
+        yield parse_file(resource_name, f, input_dir, output_dir, pk_exclusions)
+
+def parse_file(resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions):
+    try:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        (base, ext) = os.path.splitext(xml_input_file_name)
+        outfile = os.path.join(output_dir, "%s.sql" % (base))
+        with open(outfile, 'w') as outfh:
+            with open(os.path.join(input_dir, xml_input_file_name), 'r') as infh:
+                xst = XML2SQLTransormer(infh).parse().scan_types().scan_tables(pk_exclusions)
+                for d in xst.ddl():
+                    outfh.write("%s\n" % d)
+                for sql in xst.insertion_sql():
+                    outfh.write("%s\n" % sql)
+        return xml_input_file_name
+    except Exception as e:
+        logging.error({
+            "src":resource_name, 
+            "action":"parse",
+            "error":e,
+            "filename":xml_input_file_name,
+            "msg":"parse failed"
+            })
+        return ""
 
 if __name__ == "__main__":
     infile = sys.argv[1]
