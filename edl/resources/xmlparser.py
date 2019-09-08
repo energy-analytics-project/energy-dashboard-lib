@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import re
 from enum import Enum
+import codecs
 import datetime as dt
 import fileinput
 import json
@@ -9,9 +9,10 @@ import logging
 import os
 import pdb
 import pprint
+import re
 import sys
-import xmltodict
 import uuid
+import xmltodict
 
 class Walker(object):
     def __init__(self, dict_handler_func=None, list_handler_func=None, item_handler_func=None):
@@ -268,10 +269,11 @@ class XML2SQLTransormer():
                 self.tables[name] = Table(name=name)
             t = self.tables[name]
             cols = [c for c in set(columns) if c in self.sql_types]
-            # Table has no columns, so insert a synthetic column. 'id' maps to a TEXT field.
-            if len(cols) == 0:
-                cols = ['id']
             t.local_columns = list(set(t.local_columns).union(set(cols)))
+            # Table has no columns, so insert a synthetic column. 'id' maps to a TEXT field.
+            if len(t.local_columns) == 0:
+                t.local_columns = t.primary_key = ['id']
+                print("# patch: %s" % t)
             pks = set(t.local_columns) - set(primary_key_exclusions)
             t.primary_key = list(set(t.primary_key).union(pks))
             if len(stack) > 1:
@@ -326,11 +328,87 @@ class XML2SQLTransormer():
     def query_sql(self):
         return []
 
+
+    def insertion_sql(self):
+        assert self.json is not None
+        retval = []
+
+        def sql(name, columns, values):
+            #s_columns = self.sqlite_sanitize_all(columns)
+            #s_values = self.sqlite_sanitize_values(columns, values)
+            return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
+       
+        def get_kv(keys, obj):
+            try:
+                sortedkeys = sorted(keys)
+                values = [obj[k] for k in sortedkeys]
+                return (sortedkeys, values)
+            except Exception as e:
+                print("keys: %s, e: %s, obj: %s" % (keys, e, obj.keys()))
+                raise e
+
+        def handle_dict(stack):
+            (name, obj) = stack[-1]
+
+            if name == self.root:
+                return
+
+            t = self.tables[name]
+
+            local_keys          = []
+            local_values        = []
+            parent_pk_keys      = []
+            parent_pk_values    = []
+
+            if t.primary_key == ['id'] and 'id' not in obj.keys():
+                obj['id'] = str(uuid.uuid4())
+
+            if t.parent is not None and t.parent in self.tables and len(stack) > 1:
+                for i in range(len(stack)-1, 0, -1):
+                    (pname, pobj) = stack[i]
+                    if pname == t.parent:
+                        pt = self.tables[t.parent]
+                        (parent_pk_keys, parent_pk_values) = get_kv(pt.primary_key, pobj)
+                        break
+
+            (local_keys, local_values) = get_kv(t.local_columns, obj)
+
+            columns = []
+            columns.extend(self.sqlite_sanitize_all(local_keys))
+            columns.extend(["%s_%s"%(self.sqlite_sanitize(t.parent), self.sqlite_sanitize(k)) for k in parent_pk_keys])
+    
+            values  = []
+            values.extend(self.sqlite_sanitize_values(local_keys, local_values))
+            values.extend(self.sqlite_sanitize_values(parent_pk_keys, parent_pk_values))
+            
+            retval.append(sql(name, columns, values))
+
+        Walker(dict_handler_func=handle_dict).walk(self.root, self.json)
+        return retval
+
+
+    def quote_identifier(self, s, errors="strict"):
+        """
+        https://stackoverflow.com/questions/6514274/how-do-you-escape-strings-for-sqlite-table-column-names-in-python
+        """
+        encodable = s.encode("utf-8", errors).decode("utf-8")
+
+        nul_index = encodable.find("\x00")
+
+        if nul_index >= 0:
+            error = UnicodeEncodeError("NUL-terminated utf-8", encodable,
+                                       nul_index, nul_index + 1, "NUL not allowed")
+            error_handler = codecs.lookup_error(errors)
+            replacement, _ = error_handler(error)
+            encodable = encodable.replace("\x00", replacement)
+
+        return "\"" + encodable.replace("\"", "\"\"") + "\""
+
     def sqlite_sanitize_values(self, columns, values):
         s_values = []
         for (c,v) in zip(columns, values):
             if SqlTypeEnum.type_of(v) == SqlTypeEnum.TEXT:
-                s_values.append("'%s'" % v)
+                s_values.append(self.quote_identifier(v))
             else:
                 s_values.append(v)
         return s_values
@@ -457,7 +535,7 @@ if __name__ == "__main__":
         xst = XML2SQLTransormer(f).parse().scan_types().scan_tables(['value'])
         for d in xst.ddl():
             print(d)
-#        for insert_sql in xst.insertion_sql():
-#           print(insert_sql)
+        for sql in xst.insertion_sql():
+           print(sql)
 #        for query_sql in xst.query_sql():
 #            print(query_sql)
