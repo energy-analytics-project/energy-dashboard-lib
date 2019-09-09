@@ -44,10 +44,8 @@ def create(debug, ed_path, feed, maintainer, company, email, url, start_date_tup
             if debug: debugout("Rendered '%s'" % target)
     return feed
 
-def invoke(ctx, command):
-    feed = ctx.obj['feed']
-    cfg = Config.from_ctx(ctx)
-    target_dir = os.path.join(cfg.ed_path, 'data', feed)
+def invoke(debug, feed, ed_path, command):
+    target_dir = os.path.join(ed_path, 'data', feed)
     if not os.path.exists(target_dir):
         raise Exception("Feed does not exist at: %s" % target_dir)
     return runyield([command], target_dir)

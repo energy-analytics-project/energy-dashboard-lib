@@ -8,8 +8,7 @@ def runyield(cmd, cwd):
         process = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=writer)
         while process.poll() is None:
             data = reader.read()
-            if len(data) > 0 and data != "\n":
-                yield from reader.read()
+            yield reader.read()
             time.sleep(0.1)
-        yield from reader.read()
+        yield reader.read()
 
