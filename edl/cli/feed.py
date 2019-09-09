@@ -1,10 +1,11 @@
 from edl.resources.dbg import debugout
 from edl.resources.exec import runyield
+from jinja2 import Environment, PackageLoader, select_autoescape
+from shutil import make_archive, rmtree
 import edl.resources.log as log
 import os
 import shutil
-from jinja2 import Environment, PackageLoader, select_autoescape
-from shutil import make_archive, rmtree
+import tarfile
 
 STAGES  = ['download', 'unzip', 'parse', 'insert']
 DIRS    = ['zip', 'xml', 'sql', 'db']
@@ -169,6 +170,7 @@ def reset(logger, feed, ed_path, stage):
             "ERROR"     : "failed to makedirs target_dir",
             "exception" : str(e)
             })
+    return p
 
 def lines_in_file(f):
     try:
@@ -198,30 +200,75 @@ def process_stages(debug, feed, ed_path, stages):
             #logging.error({ })
             pass
 
-def restore_locally(ctx, feed, archivedir):
-    if archivedir is None:
-        archivedir = os.path.join(cfg.ed_path, 'archive')
-    archive_name = os.path.join(archivedir, "%s.tar.gz" % feed)
-    tf = tarfile.open(archive_name)
-    feed_dir = os.path.join(cfg.ed_path, 'data', feed)
-    if os.path.exists(feed_dir):
-        return "Must delete the target feed dir '%s' before restoring." % feed_dir
+
+def archive_locally(logger, feed, ed_path, archivedir):
+    chlogger = logger.getChild(__name__)
+    archivedir1 = os.path.expanduser(archivedir)
+    if archivedir1.startswith("/"):
+        archivedire2 = archivedir1
     else:
-        return tf.extractall(os.path.join(cfg.ed_path, 'data', feed))
-
-
-def archive_locally(debug, feed, ed_path, archivedir):
-    if archivedir is None:
-        archivedir = os.path.join(ed_path, 'archive')
-    archive_name = os.path.join(archivedir, feed)
+        archivedir2 = os.path.join(ed_path, archivedir1)
+    archive_name = os.path.join(archivedir2, feed)
     root_dir = os.path.expanduser(os.path.join(ed_path, 'data', feed))
-    return make_archive(archive_name, 'gztar', root_dir)
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "archive_locally",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": archivedir2,
+            "archive_name": archive_name,
+            "root_dir"  : root_dir
+        })
+    try:
+        return make_archive(archive_name, 'gztar', root_dir)
+    except Exception as e:
+        log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "archive_locally",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target_dir": archivedir2,
+                "archive_name": archive_name,
+                "root_dir"  : root_dir,
+                "ERROR"     : "make archive failed",
+                "exception" : str(e)
+            })
+
+def restore_locally(logger, feed, ed_path, archive):
+    chlogger = logger.getChild(__name__)
+    tf = tarfile.open(archive)
+    feed_dir = os.path.join(ed_path, 'data', feed)
+    if os.path.exists(feed_dir):
+        log.error(chlogger, {
+                "name"      : __name__,
+                "method"    : "restore_locally",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "archive"   : archive,
+                "feed_dir"  : feed_dir,
+                "ERROR"     : "Must delete the feed_dir before restoring."
+                })
+    else:
+        try:
+            tf.extractall(os.path.join(ed_path, 'data', feed))
+            return feed_dir
+        except Exception as e:
+            log.error(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "restore_locally",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "archive"   : archive,
+                    "feed_dir"  : feed_dir,
+                    "ERROR"     : "Failed to restore archive to feed_dir",
+                    "exception" : str(e)
+                    })
 
 def archive_to_s3(ctx, feed, service):
     """
     Archive feed to an S3 bucket.
     """
-    feed_dir    = os.path.join(cfg.ed_path, 'data', feed)
+    feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)
     runyield([cmd], feed_dir)
