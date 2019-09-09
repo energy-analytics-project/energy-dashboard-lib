@@ -1,5 +1,6 @@
 from edl.resources.dbg import debugout
 from edl.resources.exec import runyield
+import edl.resources.log as log
 import os
 import shutil
 from jinja2 import Environment, PackageLoader, select_autoescape
@@ -12,10 +13,17 @@ STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
 
 def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tuple):
-    lgr = logger.getChild(__name__)
+    chlogger = logger.getChild(__name__)
     new_feed_dir = os.path.join(ed_path, 'data', feed)
     os.mkdir(new_feed_dir)
-    if debug: debugout("Created directory: %s" % new_feed_dir)
+    log.debug(chlogger, {
+        "name"      : __name__,
+        "method"    : "create",
+        "path"      : ed_path,
+        "feed"      : feed,
+        "dir"       : new_feed_dir,
+        "message"   : "created directory"
+        })
     template_files = [
             "LICENSE","Makefile","README.md",
             "src/10_down.py","src/20_unzp.py","src/30_pars.py",
@@ -42,7 +50,14 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tu
             os.makedirs(path)
         with open(target, 'w') as f:
             f.write(template.render(m))
-            if debug: debugout("Rendered '%s'" % target)
+            log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "create",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target"    : target,
+                "message"   : "rendered target"
+                })
 
     hidden_files = ['gitignore', 'gitattributes']
     for hf in hidden_files:
@@ -50,19 +65,55 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tu
         target      = os.path.join(new_feed_dir, ".%s" % hf)
         with open(target, 'w') as f:
             f.write(template.render(m))
-            if debug: debugout("Rendered '%s'" % target)
+            log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "create",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target"    : target,
+                "message"   : "rendered target"
+                })
     return feed
 
-def invoke(debug, feed, ed_path, command):
+def invoke(logger, feed, ed_path, command):
+    chlogger = logger.getChild(__name__)
     target_dir = os.path.join(ed_path, 'data', feed)
+    log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "invoke",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "command"   : command
+        })
     if not os.path.exists(target_dir):
-        raise Exception("Feed does not exist at: %s" % target_dir)
-    return runyield([command], target_dir)
+        log.error(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "invoke",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "command"   : command,
+                    "target_dir": target_dir,
+                    "ERROR"     : "target_dir does not exist"
+            })
+        return []
+    else:
+        return runyield([command], target_dir)
 
-def status(debug, feed, ed_path, separator, header):
+def status(logger, feed, ed_path, separator, header):
+    chlogger = logger.getChild(__name__)
     target_dir = os.path.join(ed_path, 'data', feed)
     if not os.path.exists(target_dir):
-        raise Exception("Feed does not exist at: %s" % target_dir)
+        log.error(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "status",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "separator" : separator,
+                    "header"    : header,
+                    "target_dir": target_dir,
+                    "ERROR"     : "target_dir does not exist"
+            })
+        return []
     if header:
         yield separator.join(["feed name","downloaded","unzipped","parsed", "inserted"])
     txtfiles = ["zip/downloaded.txt", "xml/unzipped.txt", "sql/parsed.txt", "db/inserted.txt"]
@@ -72,16 +123,52 @@ def status(debug, feed, ed_path, separator, header):
     yield separator.join(status)
 
 
-def pre_reset(debug, feed, ed_path, stage):
-    p = os.path.join(ed_path, 'data', feed, STAGE_DIRS[stage])
-    return p
+def pre_reset(logger, feed, ed_path, stage):
+    return os.path.join(ed_path, 'data', feed, STAGE_DIRS[stage])
 
-def reset(p):
+def reset(logger, feed, ed_path, stage):
+    chlogger = logger.getChild(__name__)
+    p = pre_reset(logger, feed, ed_path, stage)
     try:
         shutil.rmtree(p)
-    except:
-        pass
-    os.makedirs(p)
+        log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "reset",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "message"   : "removed target_dir",
+            })
+    except Exception as e:
+        log.error(chlogger, {
+            "name"      : __name__,
+            "method"    : "reset",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "ERROR"     : "failed to remove target_dir",
+            "exception" : str(e)
+            })
+    try:
+        os.makedirs(p)
+        log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "reset",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "message"   : "makedirs target_dir",
+            })
+    except Exception as e:
+        log.error(chlogger, {
+            "name"      : __name__,
+            "method"    : "reset",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "ERROR"     : "failed to makedirs target_dir",
+            "exception" : str(e)
+            })
 
 def lines_in_file(f):
     try:

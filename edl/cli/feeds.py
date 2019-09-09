@@ -1,10 +1,10 @@
 import os
-import json
+from edl.resources import log
 
 def list(logger, energy_dashboard_path):
-    lgr = logger.getChild(__name__)
-    lgr.debug(json.dumps({
+    chlogger = logger.getChild(__name__)
+    log.debug(chlogger, {
         "name"      : __name__,
         "method"    : "list",
-        "path"      : energy_dashboard_path}))
+        "path"      : energy_dashboard_path})
     return os.listdir(os.path.join(energy_dashboard_path, "data"))

@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import os
+import json
 
 LOG_LEVELS=[
                 "CRITICAL",
@@ -17,3 +18,19 @@ def configure_logging():
         logging.basicConfig(
                 format='{"ts":"%(asctime)s", "msg":%(message)s}', 
                 datefmt='%m/%d/%Y %I:%M:%S %p')
+
+def debug(logger, obj):
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(json.dumps(obj))
+def info(logger, obj):
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(json.dumps(obj))
+def warning(logger, obj):
+    if logger.isEnabledFor(logging.WARNING):
+        logger.warning(json.dumps(obj))
+def error(logger, obj):
+    if logger.isEnabledFor(logging.ERROR):
+        logger.error(json.dumps(obj))
+def critical(logger, obj):
+    if logger.isEnabledFor(logging.CRITICAL):
+        logger.critical(json.dumps(obj))
