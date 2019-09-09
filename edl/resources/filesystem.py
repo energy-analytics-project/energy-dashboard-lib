@@ -11,6 +11,7 @@ BAD_S3_CHARS = ['&', '@', ':', ',', '$', '=', '+', '?', ';', ' ', '\\', '^', '>'
 # TODO: need to sort this out after the migration
 COMMON_REPLACEMENTS = [
     ("http://oasis.caiso.com/oasisapi/", "oasis_"),
+    ("http://zwrob.com/", ""),
     ("/", "_"),
     ("&", ","),
     ("SingleZip", "SZ"),
