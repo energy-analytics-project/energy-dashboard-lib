@@ -50,10 +50,8 @@ def invoke(debug, feed, ed_path, command):
         raise Exception("Feed does not exist at: %s" % target_dir)
     return runyield([command], target_dir)
 
-def status(ctx, separator, header):
-    feed = ctx.obj['feed']
-    cfg = Config.from_ctx(ctx)
-    target_dir = os.path.join(cfg.ed_path, 'data', feed)
+def status(debug, feed, ed_path, separator, header):
+    target_dir = os.path.join(ed_path, 'data', feed)
     if not os.path.exists(target_dir):
         raise Exception("Feed does not exist at: %s" % target_dir)
     if header:
