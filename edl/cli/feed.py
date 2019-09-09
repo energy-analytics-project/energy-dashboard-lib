@@ -1,4 +1,3 @@
-from edl.cli.config import Config
 from edl.resources.dbg import debugout
 from edl.resources.exec import runyield
 import os
@@ -12,7 +11,8 @@ PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.sh']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
 
-def create(debug, ed_path, feed, maintainer, company, email, url, start_date_tuple):
+def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tuple):
+    lgr = logger.getChild(__name__)
     new_feed_dir = os.path.join(ed_path, 'data', feed)
     os.mkdir(new_feed_dir)
     if debug: debugout("Created directory: %s" % new_feed_dir)
@@ -112,7 +112,6 @@ def process_stages(debug, feed, ed_path, stages):
             pass
 
 def restore_locally(ctx, feed, archivedir):
-    cfg = Config.from_ctx(ctx)
     if archivedir is None:
         archivedir = os.path.join(cfg.ed_path, 'archive')
     archive_name = os.path.join(archivedir, "%s.tar.gz" % feed)
@@ -135,7 +134,6 @@ def archive_to_s3(ctx, feed, service):
     """
     Archive feed to an S3 bucket.
     """
-    cfg         = Config.from_ctx(ctx)
     feed_dir    = os.path.join(cfg.ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)

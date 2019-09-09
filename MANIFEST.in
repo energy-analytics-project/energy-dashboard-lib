@@ -1,2 +1,4 @@
 include LICENSE
 include CHANGELOG.md
+include edc/templates/*
+include edc/config/*

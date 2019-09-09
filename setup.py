@@ -152,7 +152,8 @@ setup(
             'idna==2.8',
             'requests==2.22.0',
             'urllib3==1.25.3',
-            'xmltodict==0.12.0'
+            'xmltodict==0.12.0',
+            "Jinja2"
     ],  
     # Optional
 
