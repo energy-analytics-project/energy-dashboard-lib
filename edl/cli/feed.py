@@ -6,13 +6,21 @@ import shutil
 from jinja2 import Environment, PackageLoader, select_autoescape
 from shutil import make_archive, rmtree
 
+STAGES  = ['download', 'unzip', 'parse', 'insert']
+DIRS    = ['zip', 'xml', 'sql', 'db']
+PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.sh']
+STAGE_DIRS = dict(zip(STAGES, DIRS))
+STAGE_PROCS = dict(zip(STAGES, PROCS))
+
 def create(debug, ed_path, feed, maintainer, company, email, url, start_date_tuple):
     new_feed_dir = os.path.join(ed_path, 'data', feed)
     os.mkdir(new_feed_dir)
     if debug: debugout("Created directory: %s" % new_feed_dir)
-    template_files = ["LICENSE","Makefile","README.md",
+    template_files = [
+            "LICENSE","Makefile","README.md",
             "src/10_down.py","src/20_unzp.py","src/30_pars.py",
-            "src/40_inse.py", "src/50_save.sh", "manifest.json"]
+            "src/40_inse.py", "src/50_save.sh", "manifest.json"
+            ]
     env = Environment(
         loader=PackageLoader('edl', 'templates'),
         autoescape=select_autoescape(['py'])
@@ -65,8 +73,7 @@ def status(debug, feed, ed_path, separator, header):
 
 
 def pre_reset(debug, feed, ed_path, stage):
-    stage_dir = {'download' : 'zip', 'unzip' : 'xml', 'parse': 'sql', 'insert':'db'}
-    p = os.path.join(ed_path, 'data', feed, stage_dir[stage])
+    p = os.path.join(ed_path, 'data', feed, STAGE_DIRS[stage])
     return p
 
 def reset(p):
@@ -84,16 +91,25 @@ def lines_in_file(f):
     except:
         return 0
 
-def process_feed(ctx, feed, stage):
-    cfg         = Config.from_ctx(ctx)
-    feed_dir    = os.path.join(cfg.ed_path, 'data', feed)
+def process_all_stages(debug, feed, ed_path):
+    feed_dir    = os.path.join(ed_path, 'data', feed)
     src_dir     = os.path.join(feed_dir, 'src')
-    items       = os.listdir(src_dir)
-    srtd_items  = sorted(items)
-    for item in srtd_items:
-        cmd = os.path.join(src_dir, item)
+    src_files   = sorted(os.listdir(src_dir))
+    for src_file in src_files:
+        cmd = os.path.join(src_dir, src_file)
         yield runyield(cmd, feed_dir)
 
+def process_stages(debug, feed, ed_path, stages):
+    feed_dir    = os.path.join(ed_path, 'data', feed)
+    src_dir     = os.path.join(feed_dir, 'src')
+    src_files   = set(os.listdir(src_dir))
+    for s in stages:
+        if s in src_files:
+            cmd = os.path.join(src_dir, s)
+            yield runyield(cmd, feed_dir)
+        else:
+            #logging.error({ })
+            pass
 
 def restore_locally(ctx, feed, archivedir):
     cfg = Config.from_ctx(ctx)

@@ -46,10 +46,12 @@ def create(f:str):
         m = json.load(json_cfg_file)
         return Config.from_map(m)
 
-def update(debug, config_dir, path, verbose):
+def update(logger, config_dir, path, verbose):
+    lgr = logger.getChild(__name__)
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
         if debug: debugout("created config dir: %s" % config_dir)
+        lgr.debug({})
     cfg_file_path = os.path.join(config_dir, 'energy-dashboard-client.config')
     if os.path.exists(cfg_file_path):
         config = Config.load(cfg_file_path)
