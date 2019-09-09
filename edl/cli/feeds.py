@@ -1,8 +1,4 @@
-from edl.cli.config import Config
-from edl.resources.dbg import debugout
 import os
 
-def list(ctx):
-    cfg = Config.from_ctx(ctx)
-    items = os.listdir(os.path.join(cfg.ed_path(), "data"))
-    return items
+def list(energy_dashboard_path):
+    return os.listdir(os.path.join(energy_dashboard_path, "data"))
