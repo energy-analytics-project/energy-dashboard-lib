@@ -11,13 +11,14 @@ LOG_LEVELS=[
                 "DEBUG"
         ]
 
-def configure_logging():
-    if os.path.exists("logging.conf"):
+def configure_logging(logging_level=None):
+    logging.basicConfig(
+            format='{"ts":"%(asctime)s", "msg":%(message)s}', 
+            datefmt='%m/%d/%Y %I:%M:%S %p')
+    if logging_level is not None:
+        logging.basicConfig(level=logging_level)
+    elif os.path.exists("logging.conf"):
         logging.config.fileConfig('logging.conf')
-    else:
-        logging.basicConfig(
-                format='{"ts":"%(asctime)s", "msg":%(message)s}', 
-                datefmt='%m/%d/%Y %I:%M:%S %p')
 
 def debug(logger, obj):
     if logger.isEnabledFor(logging.DEBUG):

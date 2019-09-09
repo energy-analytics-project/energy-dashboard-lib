@@ -6,6 +6,8 @@ import edl.resources.log as log
 import os
 import shutil
 import tarfile
+from pathlib import Path
+import stat
 
 STAGES  = ['download', 'unzip', 'parse', 'insert']
 DIRS    = ['zip', 'xml', 'sql', 'db']
@@ -13,7 +15,7 @@ PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.sh']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
 
-def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tuple):
+def create(logger, ed_path, feed, maintainer, company, email, url, start_date_list):
     chlogger = logger.getChild(__name__)
     new_feed_dir = os.path.join(ed_path, 'data', feed)
     os.mkdir(new_feed_dir)
@@ -41,7 +43,7 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tu
             'EMAIL'     : email,
             'DATA_URL'  : url,
             'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % feed,
-            'START'     : start_date_tuple,
+            'START'     : start_date_list,
     }
     for tf in template_files:
         template    = env.get_template(tf)
@@ -74,6 +76,18 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date_tu
                 "target"    : target,
                 "message"   : "rendered target"
                 })
+    for src_file in os.listdir(os.path.join(new_feed_dir, 'src')):
+        fp = os.path.join(new_feed_dir, 'src', src_file)
+        f = Path(fp)
+        f.chmod(f.stat().st_mode | stat.S_IEXEC)
+        log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "create",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "file"      : fp,
+            "message"   : "chmod +x"
+            })
     return feed
 
 def invoke(logger, feed, ed_path, command):
@@ -180,26 +194,55 @@ def lines_in_file(f):
     except:
         return 0
 
-def process_all_stages(debug, feed, ed_path):
+def src_files(logger, feed, ed_path):
+    chlogger = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
     src_dir     = os.path.join(feed_dir, 'src')
     src_files   = sorted(os.listdir(src_dir))
-    for src_file in src_files:
-        cmd = os.path.join(src_dir, src_file)
-        yield runyield(cmd, feed_dir)
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "all_stages",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "src_dir"   : src_dir,
+            "src_files" : src_files
+        })
+    return src_files
 
-def process_stages(debug, feed, ed_path, stages):
+def process_all_stages(logger, feed, ed_path):
+    chlogger = logger.getChild(__name__)
+    for src_file in src_files(logger, feed, ed_path):
+        yield process_file(logger, feed, ed_path, src_file)
+
+def process_file(logger, feed, ed_path, src_file):
+    chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
-    src_dir     = os.path.join(feed_dir, 'src')
-    src_files   = set(os.listdir(src_dir))
-    for s in stages:
-        if s in src_files:
-            cmd = os.path.join(src_dir, s)
-            yield runyield(cmd, feed_dir)
-        else:
-            #logging.error({ })
-            pass
+    cmd         = os.path.join("src", src_file)
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "process_all_stages",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "cmd"       : cmd
+        })
+    return runyield(cmd, feed_dir)
 
+def process_stages(logger, feed, ed_path, stages):
+    chlogger = logger.getChild(__name__)
+    stage_files = sorted([STAGE_PROCS[s] for s in stages])
+    for sf in stage_files:
+        if sf in src_files(logger, feed, ed_path):
+            yield process_file(logger, feed, ed_path, sf)
+        else:
+            log.debug(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "process_stages",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "stage_file": sf,
+                    "src_files" : src_files,
+                    "ERROR"     : "stage_file not in src_files"
+                })
 
 def archive_locally(logger, feed, ed_path, archivedir):
     chlogger = logger.getChild(__name__)

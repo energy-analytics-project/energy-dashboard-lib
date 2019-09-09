@@ -5,7 +5,7 @@
     "name":           "{{NAME}}",
     "repo":           "{{REPO_URL}}",
     "url" :           "{{DATA_URL}}",
-    "start_date":     "{{START}}",
+    "start_date":     {{START}},
     "description":    "TODO: add a description of this data source here",
     "comments":	      "TODO: add any comments here",
     "pk_exclusion":   ["value"],
