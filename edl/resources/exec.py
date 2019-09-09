@@ -1,5 +1,8 @@
+import io
+import subprocess
+import time
+
 def runyield(cmd, cwd):
-    click.echo("# %s$ %s" % (cwd,cmd))
     filename    = 'edc.log'
     with io.open(filename, 'wb') as writer, io.open(filename, 'rb', 1) as reader:
         process = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=writer)
