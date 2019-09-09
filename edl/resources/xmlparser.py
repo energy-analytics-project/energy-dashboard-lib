@@ -206,11 +206,11 @@ class XML2SQLTransormer():
         self.root               = 'root'
         """root : name of the root node which is really the document root, for which no table is generated"""
 
-    def parse(self):
+    def parse(self, xml_namespace):
         """
         Parse the loaded xmlfile and load into the self.json object.
         """
-        self.json = xmltodict.parse(self.xmlfile.read())
+        self.json = xmltodict.parse(self.xmlfile.read(), process_namespaces=True, namespaces={xml_namespace: None})
         # allow method chaining
         return self
 
@@ -434,23 +434,35 @@ class XML2SQLTransormer():
             return None
         return parent
 
-def parse(resource_name, input_files, input_dir, output_dir, pk_exclusions):
+def parse(resource_name, input_files, input_dir, output_dir, pk_exclusions, xml_namespace):
     for f in input_files:
-        yield parse_file(resource_name, f, input_dir, output_dir, pk_exclusions)
+        yield parse_file(resource_name, f, input_dir, output_dir, pk_exclusions, xml_namespace)
 
-def parse_file(resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions):
+def parse_file(resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions, xml_namespace):
     try:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         (base, ext) = os.path.splitext(xml_input_file_name)
         outfile = os.path.join(output_dir, "%s.sql" % (base))
+        total_ddl = 0
+        total_sql = 0
         with open(outfile, 'w') as outfh:
             with open(os.path.join(input_dir, xml_input_file_name), 'r') as infh:
-                xst = XML2SQLTransormer(infh).parse().scan_types().scan_tables(pk_exclusions)
+                xst = XML2SQLTransormer(infh).parse(xml_namespace).scan_types().scan_tables(pk_exclusions)
                 for d in xst.ddl():
                     outfh.write("%s\n" % d)
+                    total_ddl += 1
                 for sql in xst.insertion_sql():
                     outfh.write("%s\n" % sql)
+                    total_sql += 1
+        logging.info({
+            "src":resource_name, 
+            "action":"parse_file",
+            "infile": xml_input_file_name,
+            "outfile":outfile,
+            "total_ddl":total_ddl,
+            "total_sql":total_sql
+            })
         return xml_input_file_name
     except Exception as e:
         logging.error({
