@@ -62,11 +62,17 @@ def status(debug, feed, ed_path, separator, header):
     status.extend(counts)
     yield separator.join(status)
 
-def reset(ctx, feed, stage):
+
+def pre_reset(debug, feed, ed_path, stage):
     stage_dir = {'download' : 'zip', 'unzip' : 'xml', 'parse': 'sql', 'insert':'db'}
-    cfg = Config.from_ctx(ctx)
-    p = os.path.join(cfg.ed_path, 'data', feed, stage_dir[s])
-    shutil.rmtree(p)
+    p = os.path.join(ed_path, 'data', feed, stage_dir[stage])
+    return p
+
+def reset(p):
+    try:
+        shutil.rmtree(p)
+    except:
+        pass
     os.makedirs(p)
 
 def lines_in_file(f):
