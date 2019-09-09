@@ -4,6 +4,7 @@ from edl.resources.exec import runyield
 import os
 import shutil
 from jinja2 import Environment, PackageLoader, select_autoescape
+from shutil import make_archive, rmtree
 
 def create(debug, ed_path, feed, maintainer, company, email, url, start_date_tuple):
     new_feed_dir = os.path.join(ed_path, 'data', feed)
@@ -107,12 +108,11 @@ def restore_locally(ctx, feed, archivedir):
         return tf.extractall(os.path.join(cfg.ed_path, 'data', feed))
 
 
-def archive_locally(ctx, feed, archivedir):
-    cfg = Config.from_ctx(ctx)
+def archive_locally(debug, feed, ed_path, archivedir):
     if archivedir is None:
-        archivedir = os.path.join(cfg.ed_path, 'archive')
+        archivedir = os.path.join(ed_path, 'archive')
     archive_name = os.path.join(archivedir, feed)
-    root_dir = os.path.expanduser(os.path.join(cfg.ed_path, 'data', feed))
+    root_dir = os.path.expanduser(os.path.join(ed_path, 'data', feed))
     return make_archive(archive_name, 'gztar', root_dir)
 
 def archive_to_s3(ctx, feed, service):
