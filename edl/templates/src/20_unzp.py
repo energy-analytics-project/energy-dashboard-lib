@@ -5,13 +5,14 @@
 #              xml parsing and further injestion
 # -----------------------------------------------------------------------------
 
-import os
-import zipfile as zf
-import logging
-import json
-from edl.resources import state
 from edl.resources import log
+from edl.resources import state
 from edl.resources import zp
+import json
+import logging
+import os
+import sys
+import zipfile as zf
 
 # -----------------------------------------------------------------------------
 # Config
@@ -40,7 +41,7 @@ def config():
 # -----------------------------------------------------------------------------
 # Entrypoint
 # -----------------------------------------------------------------------------
-def run(manifest, config, logging_level=logging.INFO):
+def run(manifest, config, logging_level):
     log.configure_logging(logging_level)
     resource_name   = manifest['name']
     xml_dir         = config['working_dir']
@@ -60,6 +61,10 @@ def run(manifest, config, logging_level=logging.INFO):
 # Main
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        loglevel = sys.argv[1]
+    else:
+        loglevel = "INFO"
     with open('manifest.json', 'r') as json_file:
         m = json.load(json_file)
-        run(m, config())
+        run(m, config(), logging_level=loglevel)

@@ -1,13 +1,14 @@
 from edl.resources.dbg import debugout
 from edl.resources.exec import runyield
 from jinja2 import Environment, PackageLoader, select_autoescape
+from pathlib import Path
 from shutil import make_archive, rmtree
 import edl.resources.log as log
 import os
 import shutil
-import tarfile
-from pathlib import Path
 import stat
+import sys
+import tarfile
 
 STAGES  = ['download', 'unzip', 'parse', 'insert']
 DIRS    = ['zip', 'xml', 'sql', 'db']
@@ -88,6 +89,10 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date_li
             "file"      : fp,
             "message"   : "chmod +x"
             })
+    
+    for d in DIRS:
+        os.makedirs(os.path.join(new_feed_dir, d))
+
     return feed
 
 def invoke(logger, feed, ed_path, command):
@@ -201,9 +206,10 @@ def src_files(logger, feed, ed_path):
     src_files   = sorted(os.listdir(src_dir))
     log.debug(chlogger, {
             "name"      : __name__,
-            "method"    : "all_stages",
+            "method"    : "src_files",
             "path"      : ed_path,
             "feed"      : feed,
+            "feed_dir"  : feed_dir,
             "src_dir"   : src_dir,
             "src_files" : src_files
         })
@@ -211,16 +217,36 @@ def src_files(logger, feed, ed_path):
 
 def process_all_stages(logger, feed, ed_path):
     chlogger = logger.getChild(__name__)
-    for src_file in src_files(logger, feed, ed_path):
+    found_src_files = src_files(logger, feed, ed_path)
+    if len(found_src_files) < 1:
+        log.error(chlogger, {
+                "name"      : __name__,
+                "method"    : "process_all_stages",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "src_files" : found_src_files,
+                "ERROR"     : "No files found, nothing to process"
+            })
+        return
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "process_all_stages",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "src_files" : found_src_files
+        })
+    for src_file in found_src_files:
         yield process_file(logger, feed, ed_path, src_file)
 
 def process_file(logger, feed, ed_path, src_file):
     chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
-    cmd         = os.path.join("src", src_file)
+    rel_path    = os.path.join("src", src_file)
+    cmd         = "%s %d" % (rel_path,  chlogger.getEffectiveLevel())
+
     log.debug(chlogger, {
             "name"      : __name__,
-            "method"    : "process_all_stages",
+            "method"    : "process_file",
             "path"      : ed_path,
             "feed"      : feed,
             "cmd"       : cmd
@@ -307,11 +333,81 @@ def restore_locally(logger, feed, ed_path, archive):
                     "exception" : str(e)
                     })
 
-def archive_to_s3(ctx, feed, service):
+def archive_to_s3(logger, feed, ed_path, service):
     """
     Archive feed to an S3 bucket.
     """
+    chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)
-    runyield([cmd], feed_dir)
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "archive_to_s3",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "s3_dir"    : s3_dir,
+            "cmd"       : cmd,
+        })
+    return runyield([cmd], feed_dir)
+
+def restore_from_s3(logger, feed, ed_path, service):
+    """
+    Restore feed from an S3 bucket.
+
+    It'd be easy if we could simply 'rclone' from the S3 service and
+    have the entire bucket replicated here. I've not had any luck with
+    that approach.
+
+    Here's the brute force solution. Use the download state file,
+    'unzipped.txt', to direct the download operations.  
+    """
+    chlogger    = logger.getChild(__name__)
+
+    endpoints = {
+            'digitalocean'  : 'sfo2.digitaloceanspaces.com',
+            'wasabi'        : 's3.us-west-1.wasabisys.com'
+    }
+
+    feed_dir    = os.path.join(ed_path, 'data', feed)
+    outdir      = os.path.join(feed_dir, 'zip')
+    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
+    try:
+        with open(os.path.join(feed_dir, 'xml', 'unzipped.txt'), 'r') as zipfiles:
+            for zf in zipfiles:
+                zf = zf.rstrip()
+                s3_file = "%s/zip/%s" % (s3_dir, zf)
+                url = "https://%s/%s/zip/%s" % (endpoints[service], s3_dir, zf)
+                r = requests.get(url)
+                if r.status_code == 200:
+                    with open(os.path.join(outdir, zf), 'wb') as fd:
+                        for chunk in r.iter_content(chunk_size=128):
+                            fd.write(chunk)
+                logger.info(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "restore_from_s3",
+                    "feed"      : feed,
+                    "path"      : ed_path,
+                    "feed_dir"  : feed_dir,
+                    "outdir"    : outdir,
+                    "s3_file"   : s3_file,
+                    "service"   : service,
+                    "url"       : url
+                    })
+                # return downloaded urls
+                yield url
+    except Exception as e:
+        log.error(chlogger, {
+                "name"      : __name__,
+                "method"    : "restore_from_s3",
+                "feed"      : feed,
+                "path"      : ed_path,
+                "feed_dir"  : feed_dir,
+                "outdir"    : outdir,
+                "s3_dir"    : s3_dir,
+                "service"   : service,
+                "ERROR"     : "Failed to restore archive from S3",
+                "exception" : str(e)
+                })
+
+

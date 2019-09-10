@@ -45,7 +45,7 @@ def config():
 # -----------------------------------------------------------------------------
 # Entrypoint
 # -----------------------------------------------------------------------------
-def run(manifest, config, logging_level=logging.INFO):
+def run(manifest, config, logging_level):
     log.configure_logging(logging_level)
     start_date      = datetime.date(*manifest['start_date'])
     resource_name   = manifest['name']
@@ -70,6 +70,10 @@ def run(manifest, config, logging_level=logging.INFO):
 # Main
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        loglevel = sys.argv[1]
+    else:
+        loglevel = "INFO"
     with open('manifest.json', 'r') as json_file:
         m = json.load(json_file)
-        run(m, config())
+        run(m, config(), logging_level=loglevel)
