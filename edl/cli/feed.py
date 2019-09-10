@@ -19,81 +19,91 @@ STAGE_PROCS = dict(zip(STAGES, PROCS))
 def create(logger, ed_path, feed, maintainer, company, email, url, start_date_list):
     chlogger = logger.getChild(__name__)
     new_feed_dir = os.path.join(ed_path, 'data', feed)
-    os.mkdir(new_feed_dir)
-    log.debug(chlogger, {
-        "name"      : __name__,
-        "method"    : "create",
-        "path"      : ed_path,
-        "feed"      : feed,
-        "dir"       : new_feed_dir,
-        "message"   : "created directory"
-        })
-    template_files = [
-            "LICENSE","Makefile","README.md",
-            "src/10_down.py","src/20_unzp.py","src/30_pars.py",
-            "src/40_inse.py", "src/50_save.sh", "manifest.json"
-            ]
-    env = Environment(
-        loader=PackageLoader('edl', 'templates'),
-        autoescape=select_autoescape(['py'])
-    )
-    m = {
-            'NAME'      : feed,
-            'MAINTAINER': maintainer,
-            'COMPANY'   : company,
-            'EMAIL'     : email,
-            'DATA_URL'  : url,
-            'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % feed,
-            'START'     : start_date_list,
-    }
-    for tf in template_files:
-        template    = env.get_template(tf)
-        target      = os.path.join(new_feed_dir, tf)
-        path        = os.path.dirname(target)
-        if not os.path.exists(path):
-            os.makedirs(path)
-        with open(target, 'w') as f:
-            f.write(template.render(m))
-            log.debug(chlogger, {
-                "name"      : __name__,
-                "method"    : "create",
-                "path"      : ed_path,
-                "feed"      : feed,
-                "target"    : target,
-                "message"   : "rendered target"
-                })
-
-    hidden_files = ['gitignore', 'gitattributes']
-    for hf in hidden_files:
-        template    = env.get_template(hf)
-        target      = os.path.join(new_feed_dir, ".%s" % hf)
-        with open(target, 'w') as f:
-            f.write(template.render(m))
-            log.debug(chlogger, {
-                "name"      : __name__,
-                "method"    : "create",
-                "path"      : ed_path,
-                "feed"      : feed,
-                "target"    : target,
-                "message"   : "rendered target"
-                })
-    for src_file in os.listdir(os.path.join(new_feed_dir, 'src')):
-        fp = os.path.join(new_feed_dir, 'src', src_file)
-        f = Path(fp)
-        f.chmod(f.stat().st_mode | stat.S_IEXEC)
+    try:
+        os.mkdir(new_feed_dir)
         log.debug(chlogger, {
             "name"      : __name__,
             "method"    : "create",
             "path"      : ed_path,
             "feed"      : feed,
-            "file"      : fp,
-            "message"   : "chmod +x"
+            "dir"       : new_feed_dir,
+            "message"   : "created directory"
             })
-    
-    for d in DIRS:
-        os.makedirs(os.path.join(new_feed_dir, d))
+        template_files = [
+                "LICENSE","Makefile","README.md",
+                "src/10_down.py","src/20_unzp.py","src/30_pars.py",
+                "src/40_inse.py", "src/50_save.sh", "manifest.json"
+                ]
+        env = Environment(
+            loader=PackageLoader('edl', 'templates'),
+            autoescape=select_autoescape(['py'])
+        )
+        m = {
+                'NAME'      : feed,
+                'MAINTAINER': maintainer,
+                'COMPANY'   : company,
+                'EMAIL'     : email,
+                'DATA_URL'  : url,
+                'REPO_URL'  : "https://github.com/energy-analytics-project/%s" % feed,
+                'START'     : start_date_list,
+        }
+        for tf in template_files:
+            template    = env.get_template(tf)
+            target      = os.path.join(new_feed_dir, tf)
+            path        = os.path.dirname(target)
+            if not os.path.exists(path):
+                os.makedirs(path)
+            with open(target, 'w') as f:
+                f.write(template.render(m))
+                log.debug(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "create",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "target"    : target,
+                    "message"   : "rendered target"
+                    })
 
-    return feed
+        hidden_files = ['gitignore', 'gitattributes']
+        for hf in hidden_files:
+            template    = env.get_template(hf)
+            target      = os.path.join(new_feed_dir, ".%s" % hf)
+            with open(target, 'w') as f:
+                f.write(template.render(m))
+                log.debug(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "create",
+                    "path"      : ed_path,
+                    "feed"      : feed,
+                    "target"    : target,
+                    "message"   : "rendered target"
+                    })
+        for src_file in os.listdir(os.path.join(new_feed_dir, 'src')):
+            fp = os.path.join(new_feed_dir, 'src', src_file)
+            f = Path(fp)
+            f.chmod(f.stat().st_mode | stat.S_IEXEC)
+            log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "create",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "file"      : fp,
+                "message"   : "chmod +x"
+                })
+        
+        for d in DIRS:
+            os.makedirs(os.path.join(new_feed_dir, d))
+        return feed
+    except Exception as e:
+        log.critical(chlogger, {
+            "name"      : __name__,
+            "method"    : "create",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "ERROR"     : "FAILED to create feed",
+            "exception" : str(e)
+            })
+        # return nothing
 
 def invoke(logger, feed, ed_path, command):
     chlogger = logger.getChild(__name__)
@@ -106,7 +116,7 @@ def invoke(logger, feed, ed_path, command):
                 "command"   : command
         })
     if not os.path.exists(target_dir):
-        log.error(chlogger, {
+        log.critical(chlogger, {
                     "name"      : __name__,
                     "method"    : "invoke",
                     "path"      : ed_path,
@@ -115,7 +125,6 @@ def invoke(logger, feed, ed_path, command):
                     "target_dir": target_dir,
                     "ERROR"     : "target_dir does not exist"
             })
-        return []
     else:
         return runyield([command], target_dir)
 
@@ -123,7 +132,7 @@ def status(logger, feed, ed_path, separator, header):
     chlogger = logger.getChild(__name__)
     target_dir = os.path.join(ed_path, 'data', feed)
     if not os.path.exists(target_dir):
-        log.error(chlogger, {
+        log.critical(chlogger, {
                     "name"      : __name__,
                     "method"    : "status",
                     "path"      : ed_path,
@@ -133,7 +142,6 @@ def status(logger, feed, ed_path, separator, header):
                     "target_dir": target_dir,
                     "ERROR"     : "target_dir does not exist"
             })
-        return []
     if header:
         yield separator.join(["feed name","downloaded","unzipped","parsed", "inserted"])
     txtfiles = ["zip/downloaded.txt", "xml/unzipped.txt", "sql/parsed.txt", "db/inserted.txt"]
@@ -160,7 +168,7 @@ def reset(logger, feed, ed_path, stage):
             "message"   : "removed target_dir",
             })
     except Exception as e:
-        log.error(chlogger, {
+        log.critical(chlogger, {
             "name"      : __name__,
             "method"    : "reset",
             "path"      : ed_path,
@@ -180,7 +188,7 @@ def reset(logger, feed, ed_path, stage):
             "message"   : "makedirs target_dir",
             })
     except Exception as e:
-        log.error(chlogger, {
+        log.critical(chlogger, {
             "name"      : __name__,
             "method"    : "reset",
             "path"      : ed_path,
@@ -219,7 +227,7 @@ def process_all_stages(logger, feed, ed_path):
     chlogger = logger.getChild(__name__)
     found_src_files = src_files(logger, feed, ed_path)
     if len(found_src_files) < 1:
-        log.error(chlogger, {
+        log.critical(chlogger, {
                 "name"      : __name__,
                 "method"    : "process_all_stages",
                 "path"      : ed_path,
@@ -272,26 +280,27 @@ def process_stages(logger, feed, ed_path, stages):
 
 def archive_locally(logger, feed, ed_path, archivedir):
     chlogger = logger.getChild(__name__)
-    archivedir1 = os.path.expanduser(archivedir)
-    if archivedir1.startswith("/"):
-        archivedire2 = archivedir1
-    else:
-        archivedir2 = os.path.join(ed_path, archivedir1)
-    archive_name = os.path.join(archivedir2, feed)
-    root_dir = os.path.expanduser(os.path.join(ed_path, 'data', feed))
-    log.debug(chlogger, {
-            "name"      : __name__,
-            "method"    : "archive_locally",
-            "path"      : ed_path,
-            "feed"      : feed,
-            "target_dir": archivedir2,
-            "archive_name": archive_name,
-            "root_dir"  : root_dir
-        })
     try:
+        archivedir1 = os.path.expanduser(archivedir)
+        if archivedir1.startswith("/"):
+            archivedire2 = archivedir1
+        else:
+            archivedir2 = os.path.join(ed_path, archivedir1)
+
+        archive_name = os.path.join(archivedir2, feed)
+        root_dir = os.path.expanduser(os.path.join(ed_path, 'data', feed))
+        log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "archive_locally",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target_dir": archivedir2,
+                "archive_name": archive_name,
+                "root_dir"  : root_dir
+            })
         return make_archive(archive_name, 'gztar', root_dir)
     except Exception as e:
-        log.debug(chlogger, {
+        log.critical(chlogger, {
                 "name"      : __name__,
                 "method"    : "archive_locally",
                 "path"      : ed_path,
@@ -308,7 +317,7 @@ def restore_locally(logger, feed, ed_path, archive):
     tf = tarfile.open(archive)
     feed_dir = os.path.join(ed_path, 'data', feed)
     if os.path.exists(feed_dir):
-        log.error(chlogger, {
+        log.critical(chlogger, {
                 "name"      : __name__,
                 "method"    : "restore_locally",
                 "path"      : ed_path,
@@ -322,7 +331,7 @@ def restore_locally(logger, feed, ed_path, archive):
             tf.extractall(os.path.join(ed_path, 'data', feed))
             return feed_dir
         except Exception as e:
-            log.error(chlogger, {
+            log.critical(chlogger, {
                     "name"      : __name__,
                     "method"    : "restore_locally",
                     "path"      : ed_path,
@@ -383,21 +392,35 @@ def restore_from_s3(logger, feed, ed_path, service):
                     with open(os.path.join(outdir, zf), 'wb') as fd:
                         for chunk in r.iter_content(chunk_size=128):
                             fd.write(chunk)
-                logger.info(chlogger, {
-                    "name"      : __name__,
-                    "method"    : "restore_from_s3",
-                    "feed"      : feed,
-                    "path"      : ed_path,
-                    "feed_dir"  : feed_dir,
-                    "outdir"    : outdir,
-                    "s3_file"   : s3_file,
-                    "service"   : service,
-                    "url"       : url
-                    })
+                    logger.info(chlogger, {
+                        "name"      : __name__,
+                        "method"    : "restore_from_s3",
+                        "feed"      : feed,
+                        "path"      : ed_path,
+                        "feed_dir"  : feed_dir,
+                        "outdir"    : outdir,
+                        "s3_file"   : s3_file,
+                        "service"   : service,
+                        "url"       : url
+                        })
+                else:
+                    log.error(chlogger, {
+                        "name"      : __name__,
+                        "method"    : "restore_from_s3",
+                        "feed"      : feed,
+                        "path"      : ed_path,
+                        "feed_dir"  : feed_dir,
+                        "outdir"    : outdir,
+                        "s3_file"   : s3_file,
+                        "service"   : service,
+                        "url"       : url,
+                        "ERROR"     : "Failed to retrieve artifact from S3",
+                        })
+
                 # return downloaded urls
                 yield url
     except Exception as e:
-        log.error(chlogger, {
+        log.critical(chlogger, {
                 "name"      : __name__,
                 "method"    : "restore_from_s3",
                 "feed"      : feed,
@@ -406,35 +429,22 @@ def restore_from_s3(logger, feed, ed_path, service):
                 "outdir"    : outdir,
                 "s3_dir"    : s3_dir,
                 "service"   : service,
-                "ERROR"     : "Failed to restore archive from S3",
+                "ERROR"     : "Failed to restore from S3",
                 "exception" : str(e)
                 })
 
-def scanner(logger, feed, ed_path, xmlfile)
+def scanner(logger, feed, ed_path, xmlfile):
     chlogger    = logger.getChild(__name__)
-    feed_dir    = os.path.join(ed_path(), 'data', feed)
-    xml_dir     = os.path.join(feed_dir, 'xml')
-    manifest    = os.path.join(feed_dir, 'manifest.json')
-    with open(manifest, 'r') as f:
-        obj = json.loads(f.read())
-    pk_exc = obj.pop('pk_exclusion', ['value'])
-    if not xmlfile.startswith(xml_dir):
-        xmlfile = os.path.join(xml_dir, xmlfile)
-    logger.debug(chlogger, {
-        "name"      : __name__,
-        "method"    : "scanner",
-        "feed"      : feed,
-        "path"      : ed_path,
-        "feed_dir"  : feed_dir,
-        "xml_dir"   : xml_dir,
-        "xml_file"  : xml_file,
-        "pk_exc"    : pk_exc
-        })
     try:
-        with open(xmlfile, 'r') as f:
-            return xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
-    except Exception as e:
-        log.error(chlogger, {
+        feed_dir    = os.path.join(ed_path(), 'data', feed)
+        xml_dir     = os.path.join(feed_dir, 'xml')
+        manifest    = os.path.join(feed_dir, 'manifest.json')
+        with open(manifest, 'r') as f:
+            obj = json.loads(f.read())
+        pk_exc = obj.pop('pk_exclusion', ['value'])
+        if not xmlfile.startswith(xml_dir):
+            xmlfile = os.path.join(xml_dir, xmlfile)
+        logger.debug(chlogger, {
             "name"      : __name__,
             "method"    : "scanner",
             "feed"      : feed,
@@ -443,6 +453,19 @@ def scanner(logger, feed, ed_path, xmlfile)
             "xml_dir"   : xml_dir,
             "xml_file"  : xml_file,
             "pk_exc"    : pk_exc
+            })
+        with open(xmlfile, 'r') as f:
+            return xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
+    except Exception as e:
+        log.critical(chlogger, {
+            "name"      : __name__,
+            "method"    : "scanner",
+            "feed"      : feed,
+            "path"      : ed_path,
+            "feed_dir"  : feed_dir,
+            "xml_dir"   : xml_dir,
+            "xml_file"  : xml_file,
+            "pk_exc"    : pk_exc,
             "ERROR"     : "Failed to parse and scan xml_file",
             "exception" : str(e)
             })
@@ -468,7 +491,7 @@ def get_latest_xml_file(logger, feed, ed_path, xml_dir):
     """
     xml_files   = sorted(list(fs.glob_dir(xml_dir, ".xml")))
     if len(xml_files) < 1:
-        log.error(logger, {
+        log.critical(logger, {
             "name"      : __name__,
             "method"    : "get_latest_xml_file",
             "feed"      : feed,

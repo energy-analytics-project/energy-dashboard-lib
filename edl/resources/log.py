@@ -2,6 +2,7 @@ import logging
 import logging.config
 import os
 import json
+import sys
 
 LOG_LEVELS=[
                 "CRITICAL",
@@ -35,3 +36,4 @@ def error(logger, obj):
 def critical(logger, obj):
     if logger.isEnabledFor(logging.CRITICAL):
         logger.critical(json.dumps(obj))
+    sys.exit(1)
