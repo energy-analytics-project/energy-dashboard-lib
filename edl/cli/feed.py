@@ -410,4 +410,94 @@ def restore_from_s3(logger, feed, ed_path, service):
                 "exception" : str(e)
                 })
 
+def scanner(logger, feed, ed_path, xmlfile)
+    chlogger    = logger.getChild(__name__)
+    feed_dir    = os.path.join(ed_path(), 'data', feed)
+    xml_dir     = os.path.join(feed_dir, 'xml')
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+    with open(manifest, 'r') as f:
+        obj = json.loads(f.read())
+    pk_exc = obj.pop('pk_exclusion', ['value'])
+    if not xmlfile.startswith(xml_dir):
+        xmlfile = os.path.join(xml_dir, xmlfile)
+    logger.debug(chlogger, {
+        "name"      : __name__,
+        "method"    : "scanner",
+        "feed"      : feed,
+        "path"      : ed_path,
+        "feed_dir"  : feed_dir,
+        "xml_dir"   : xml_dir,
+        "xml_file"  : xml_file,
+        "pk_exc"    : pk_exc
+        })
+    try:
+        with open(xmlfile, 'r') as f:
+            return xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
+    except Exception as e:
+        log.error(chlogger, {
+            "name"      : __name__,
+            "method"    : "scanner",
+            "feed"      : feed,
+            "path"      : ed_path,
+            "feed_dir"  : feed_dir,
+            "xml_dir"   : xml_dir,
+            "xml_file"  : xml_file,
+            "pk_exc"    : pk_exc
+            "ERROR"     : "Failed to parse and scan xml_file",
+            "exception" : str(e)
+            })
+
+def generate_table_creation_ddl(logger, feed, ed_path, xmlfile):
+    """
+    Generate table creation SQL DDL from xmlfile.
+    """
+    return list(scanner(logger, feed, ed_path, xmlfile).ddl())
+
+def generate_insertion_sql(logger, feed, ed_path, xmlfile, save):
+    """
+    Generate insertion SQL from xmlfile.
+    """
+    return list(scanner(logger, feed, ed_path, xmlfile).insertion_sql())
+
+def get_latest_xml_file(logger, feed, ed_path, xml_dir):
+    """
+    Return the latest xml file (sorted by name, which includes a timestamp).
+    May not actually be the latest due to vagaries in the names.
+
+    If this is ever a problem then stat the files and use the lmod times.
+    """
+    xml_files   = sorted(list(fs.glob_dir(xml_dir, ".xml")))
+    if len(xml_files) < 1:
+        log.error(logger, {
+            "name"      : __name__,
+            "method"    : "get_latest_xml_file",
+            "feed"      : feed,
+            "path"      : ed_path,
+            "xml_dir"   : xml_dir,
+            "ERROR"     : "Failed to parse xml_file",
+            })
+        return
+    return xml_files[-1]
+
+def create_and_save_ddl(logger, feed, ed_path, xmlfile, save):
+    """
+    Create the SQL DDL from an input xmlfile.
+    Save the DDL to the manifest if save==True.
+    Grab the latest xml file in the feed if xmlfile is None.
+    """
+    chlogger    = logger.getChild(__name__)
+    feed_dir    = os.path.join(ed_path, 'data', feed)
+    xml_dir     = os.path.join(feed_dir, 'xml')
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+
+    if xmlfile is None:
+        xmlfile = clifeed.get_latest_xml_file(logger, feed, ed_path, xml_dir)
+    if not xmlfile.startswith(xml_dir):
+        xmlfile = os.path.join(xml_dir, xmlfile)
+    ddl = clifeed.generate_table_creation_ddl(logger, feed, path, xmlfile)
+    if save:
+        obj['ddl_create'] = ddl
+        with open(manifest, 'w') as f:
+            f.write(json.dumps(obj, indent=4, sort_keys=True))
+    return ddl
 
