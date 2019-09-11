@@ -41,13 +41,22 @@ def config():
 # -----------------------------------------------------------------------------
 # Entrypoint
 # -----------------------------------------------------------------------------
-def run(manifest, config, logging_level):
-    log.configure_logging(logging_level)
+def run(logger, manifest, config):
     resource_name   = manifest['name']
     xml_dir         = config['working_dir']
     zip_dir         = config['source_dir']
     state_file      = config['state_file']
+    resource_url    = manifest['url']
     new_files = state.new_files(resource_name, state_file, zip_dir, '.zip')
+    log.info(logger, {
+        "name"      : __name__,
+        "method"    : "run",
+        "resource"  : resource_name,
+        "url"       : resource_url,
+        "xml_dir"   : xml_dir,
+        "zip_dir"   : zip_dir,
+        "new_files_count" : len(new_files),
+        })
     state.update(
             zp.unzip(
                 resource_name,
@@ -65,6 +74,14 @@ if __name__ == "__main__":
         loglevel = sys.argv[1]
     else:
         loglevel = "INFO"
+    log.configure_logging()
+    logger = logging.getLogger(__name__)
+    logger.setLevel(loglevel)
+    log.info(logger, {
+        "name"      : __name__,
+        "method"    : "main",
+        "src"       : "20_unzp.py"
+        })
     with open('manifest.json', 'r') as json_file:
         m = json.load(json_file)
-        run(m, config(), logging_level=loglevel)
+        run(logger, m, config())
