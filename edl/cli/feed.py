@@ -1,4 +1,3 @@
-from edl.resources.dbg import debugout
 from edl.resources.exec import runyield
 from jinja2 import Environment, PackageLoader, select_autoescape
 from pathlib import Path
@@ -16,6 +15,14 @@ DIRS    = ['zip', 'xml', 'sql', 'db']
 PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.sh']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
+LOGGING_LEVEL_STRINGS = {
+    50 : "CRITICAL",
+    40 : "ERROR",
+    30 : "WARNING",
+    20 : "INFO",
+    10 : "DEBUG", 
+    0  : "NOTSET"
+    }
 
 def create(logger, ed_path, feed, maintainer, company, email, url, start_date):
     """
@@ -254,7 +261,7 @@ def process_file(logger, feed, ed_path, src_file):
     chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
     rel_path    = os.path.join("src", src_file)
-    cmd         = "%s %d" % (rel_path,  chlogger.getEffectiveLevel())
+    cmd         = "%s %s" % (rel_path,  LOGGING_LEVEL_STRINGS[chlogger.getEffectiveLevel()])
 
     log.debug(chlogger, {
             "name"      : __name__,
