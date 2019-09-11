@@ -13,5 +13,6 @@
     "sql_insert":     [],
     "sql_count":      [],
     "sql_queries":    [],
-    "xml_namespace" : "http://www.caiso.com/soa/OASISReport_v1.xsd"
+    "xml_namespace" : "http://www.caiso.com/soa/OASISReport_v1.xsd",
+    "download_delay_secs":{{DELAY}} 
 }

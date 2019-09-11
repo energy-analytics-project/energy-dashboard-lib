@@ -49,10 +49,10 @@ def run(logger, manifest, config):
     start_date      = datetime.date(*manifest['start_date'])
     resource_name   = manifest['name']
     resource_url    = manifest['url']
+    delay           = manifest['download_delay_secs']
     download_dir    = config['working_dir']
     state_file      = config['state_file']
-    # sleep for 5 seconds in between downloads to meet caiso expected use requirements
-    delay   = 5
+    # sleep for N seconds in between downloads to meet caiso expected use requirements
     dates   = xtime.range_pairs(xtime.day_range_to_today(start_date))
     urls    = list(web.generate_urls(logger, dates, resource_url))
     log.info(logger, {

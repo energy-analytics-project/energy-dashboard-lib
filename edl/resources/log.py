@@ -4,6 +4,15 @@ import os
 import json
 import sys
 
+LOGGING_LEVEL_STRINGS = {
+            50 : "CRITICAL",
+            40 : "ERROR",
+            30 : "WARNING",
+            20 : "INFO",
+            10 : "DEBUG", 
+            0  : "NOTSET"
+        }
+
 LOG_LEVELS=[
                 "CRITICAL",
                 "ERROR",
