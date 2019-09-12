@@ -35,7 +35,7 @@ def config():
     """
     cwd                     = os.path.abspath(os.path.curdir)
     zip_dir                 = os.path.join(cwd, "zip")
-    state_file              = os.path.join(zip_dir, "downloaded.txt")
+    state_file              = os.path.join(zip_dir, "state.txt")
     config = {
             "working_dir"   : zip_dir,
             "state_file"    : state_file

@@ -28,7 +28,7 @@ def config():
     cwd                     = os.path.abspath(os.path.curdir)
     zip_dir                 = os.path.join(cwd, "zip")
     xml_dir                 = os.path.join(cwd, "xml")
-    state_file              = os.path.join(xml_dir, "unzipped.txt")
+    state_file              = os.path.join(xml_dir, "state.txt")
     config = {
             "source_dir"    : zip_dir,
             "working_dir"   : xml_dir,

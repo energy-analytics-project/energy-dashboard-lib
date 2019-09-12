@@ -28,11 +28,11 @@ def config():
             }
     """
     cwd                     = os.path.abspath(os.path.curdir)
-    xml_dir                 = os.path.join(cwd, "xml")
+    sql_dir                 = os.path.join(cwd, "sql")
     db_dir                  = os.path.join(cwd, "db")
-    state_file              = os.path.join(db_dir, "inserted.txt")
+    state_file              = os.path.join(db_dir, "state.txt")
     config = {
-            "source_dir"    : xml_dir,
+            "source_dir"    : sql_dir,
             "working_dir"   : db_dir,
             "state_file"    : state_file
             }
@@ -42,28 +42,16 @@ def config():
 # -----------------------------------------------------------------------------
 # Entrypoint
 # -----------------------------------------------------------------------------
-def run(manifest, config, logging_level):
-    log.configure_logging(logging_level)
+def run(logger, manifest, config):
     resource_name   = manifest['name']
-    sql_insert      = " ".join(manifest['sql_insert'])
-    ddl_create      = " ".join(manifest['ddl_create'])
-    xml_dir         = config['source_dir']
+    sql_dir         = config['source_dir']
     db_dir          = config['working_dir']
     state_file      = config['state_file']
     db_name         = "%s.db" % resource_name
+    new_files = state.new_files(resource_name, state_file, sql_dir, '.sql')
     state.update(
-            db.insert(
-                resource_name,
-                db_dir,
-                db_name,
-                ddl_create,
-                sql_insert,
-                xml.parse(
-                    resource_name,
-                    xml.new_xml_files(resource_name, state_file, xml_dir),
-                    xml_dir,
-                    xml2maps)),
-            state_file)
+                db.insert(logger, resource_name, sql_dir, db_dir, db_name, new_files),
+                state_file)
 
 # -----------------------------------------------------------------------------
 # Main
@@ -73,6 +61,14 @@ if __name__ == "__main__":
         loglevel = sys.argv[1]
     else:
         loglevel = "INFO"
+    log.configure_logging()
+    logger = logging.getLogger(__name__)
+    logger.setLevel(loglevel)
+    log.info(logger, {
+        "name"      : __name__,
+        "method"    : "main",
+        "src"       : "40_inse.py"
+        })
     with open('manifest.json', 'r') as json_file:
         m = json.load(json_file)
-        run(m, config(), logging_level=loglevel)
+        run(logger, m, config())

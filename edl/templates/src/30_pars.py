@@ -31,7 +31,7 @@ def config():
     config = {
             "source_dir"    : os.path.join(cwd, "xml"),
             "working_dir"   : os.path.join(cwd, "sql"),
-            "state_file"    : os.path.join(cwd, "sql", "parsed.txt")
+            "state_file"    : os.path.join(cwd, "sql", "state.txt")
             }
     return config
 
