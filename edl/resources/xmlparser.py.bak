@@ -17,6 +17,9 @@ import xmltodict
 from edl.resources import log
 
 class Walker(object):
+    DICT = "dict"
+    LIST = "list"
+    ITEM = "item"
     def __init__(self, logger, dict_handler_func=None, list_handler_func=None, item_handler_func=None):
         def default_dict_handler_func(stack):
             pass
@@ -29,22 +32,29 @@ class Walker(object):
         self.list_handler_func = list_handler_func or default_list_handler_func
         self.item_handler_func = item_handler_func or default_item_handler_func
 
+    def otype(self, obj):
+        if isinstance(obj, dict):
+            return Walker.DICT
+        elif isinstance(obj, list):
+            return Walker.LIST
+        return Walker.ITEM
+
     def walk(self, name, obj):
-        self._walk([(name, obj)])
+        self._walk([(name, obj, self.otype(obj))])
 
     def _walk(self, stack):
         """
         Walk object tree and inkoke handlers based on object type (dict, list, or item).
         """
-        (name, obj) = stack[-1]
-        if isinstance(obj, dict):
+        (name, obj, otype) = stack[-1]
+        if otype == Walker.DICT
             self.dict_handler_func(stack)
             for k, v in obj.items():
-                self._walk(stack + [(k, v)])
-        elif isinstance(obj, list):
+                self._walk(stack + [(k, v, self.otype(v))])
+        if otype == Walker.LIST:
             self.list_handler_func(stack)
             for idx, item in enumerate(obj):
-                self._walk(stack + [(idx, item)])
+                self._walk(stack + [(idx, item, self.otype(item))])
         else:
             self.item_handler_func(stack)
         stack.pop()
@@ -99,28 +109,28 @@ def sql_type_str(e):
     if e == SqlTypeEnum.BLOB: return "BLOB"
 
 class Table(object):
-    def __init__(self, name, parent, exclusions):
+    def __init__(self, name, columns, primary_key, parent):
         self.name = name
         """table name"""
+
+        self.local_columns = columns
+        """columns in this table"""
+
+        self.primary_key = primary_key
+        """the primary key (all the local columns minus the exclusions, if any)"""
 
         self.parent = parent
         """name parent of this table, e.g. where this table has foreign key references to"""
 
-        self.exclusions = set(exclusions)
-        """columns not to be included in the primary key"""
-        
-        self.columns = set()
-        """columns in this table"""
-
-        self.last_id = None
-        """dirty hack to track last id of a list"""
-
-    def primary_key(self):
-        """mutable: the primary key (all the local columns minus the exclusions, if any)"""
-        return list(self.columns - self.exclusions)
+        self.children = []
+        """
+        names of the children of this table:
+        * must be declared/inserted into after this table
+        * reference this table as their parent
+        """
 
     def __repr__(self):
-        return "name: %s, columns: %s, exclusions: %s, parent: %s, " % (self.name, self.columns, self.exclusions, self.parent)
+        return "name: %s, local_columns: %s, primary key: %s, parent: %s, children: %s" % (self.name, self.local_columns, self.primary_key, self.parent, self.children)
 
 class XML2SQLTransormer():
     """
@@ -161,14 +171,6 @@ class XML2SQLTransormer():
                   },
             ...
         }
-
-    Example transforms:
-
-    # 1. Dict A maps to a list of anonymous dicts -> named dicts -> items, e.g. {A:[{T:{a:1,b:2,}},]}
-    # 1. Dict A maps to a list of anonymous dicts -> items, e.g. {A:[{a:1,b:2,},]}
-             => {A:[{T:{a:1,b:2,}},]}
-
-   
 
 
     Example2:
@@ -271,209 +273,147 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         # allow method chaining
         return self
 
-    def scan_all(self, exclusions):
+    def scan_types(self):
         """
-        Recursive scan to build the types, tables, and table relations.
+        Recursive scan to build the types.
         """
-        def handle_list_or_dict(stack):
-            (child_name, obj, parent_name, pobj) = self.find_parent_child_tables(stack)
-            if child_name not in self.tables and child_name != self.root:
-                self.tables[child_name] = Table(name=child_name, parent=parent_name, exclusions=exclusions)
-
         def handle_item(stack):
-            (item_name, obj) = stack[-1]
-            if item_name not in self.sql_types:
+            (name, obj, otype) = stack[-1]
+            if name not in self.sql_types:
                 sqltype = SqlTypeEnum.type_of(obj)
-                self.sql_types[item_name] = sqltype
-            # add item to the table columns
-            (child_name, obj, parent_name, pobj) = self.find_parent_child_tables(stack)
-            t = self.tables[child_name]
-            t.columns.add(item_name)
+                self.sql_types[name] = sqltype
+                self.sql_types[self.sqlite_sanitize(name)] = sqltype
 
-        Walker(self.logger, item_handler_func=handle_item, list_handler_func=handle_list_or_dict, dict_handler_func=handle_list_or_dict).walk(self.root, self.json)
-
-        # post scan add 'id' to empty tables
-        for k,v in self.tables.items():
-            if len(v.columns) == 0:
-                v.columns.add('id')
+        Walker(self.logger, item_handler_func=handle_item).walk(self.root, self.json)
         for k,v in self.sql_types.items():
             log.debug(self.logger, {
                 "name"      : __name__,
-                "method"    : "scan_all",
+                "method"    : "scan_types",
                 "column"    : str(k),
                 "type"      : sql_type_str(v)
                 })
-        for k,v in self.tables.items():
-            log.debug(self.logger, {
-                "name"      : __name__,
-                "method"    : "scan_all",
-                "table"     : str(k),
-                "def"       : str(v)
-                })
         return self
 
-#    def scan_types(self):
-#        """
-#        Recursive scan to build the types.
-#        """
-#        def handle_item(stack):
-#            (name, obj) = stack[-1]
-#            if name not in self.sql_types:
-#                sqltype = SqlTypeEnum.type_of(obj)
-#                self.sql_types[name] = sqltype
-#                self.sql_types[self.sqlite_sanitize(name)] = sqltype
-#
-#        Walker(self.logger, item_handler_func=handle_item).walk(self.root, self.json)
-#        for k,v in self.sql_types.items():
-#            log.debug(self.logger, {
-#                "name"      : __name__,
-#                "method"    : "scan_types",
-#                "column"    : str(k),
-#                "type"      : sql_type_str(v)
-#                })
-#        return self
-#
-#    def scan_tables(self, primary_key_exclusions):
-#        """
-#        Recursive Scan to assemble the databases and database relationships.
-#        For example, in the XML snippet above we have the following
-#        relationships:
-#
-#            OASISReport -> MessageHeader -> [TimeDate, Source, Version]
-#            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_HEADER -> [...]
-#            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_DATA -> [...]
-#
-#        These relationships are represented as FOREIGN KEY references to the
-#        'parent' table.  This is especially important in the case of the
-#        REPORT_HEADER and REPORT_DATA both pointing to the empty REPORT_ITEM.
-#        If REPORT_ITEM did not exist in the schema, then there would be no way
-#        to correlate the REPORT_HEADER and the REPORT_DATA.
-#
-#        Table_columns without any columns will have an 'id TEXT' column
-#        injected into them with uuid.uuid4() values.
-#
-#        Primary keys are constructed from all of the available columns, sans
-#        those provided in the 'primary_key_exclusions' parameter. Primary keys
-#        are used for data integrity. It is important that re-running the
-#        insertions is idempotent after initial insertion. E.g.  once inserted,
-#        no new records are inserted.
-#
-#        See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
-#        """
-#        assert self.json is not None
-#
-#        def gen_table(name, columns, stack):
-#            if name == self.root:
-#                return
-#            if name not in self.tables:
-#                # only process the first time seen, this assumes the
-#                # xml is well formed and complete for all elements.
-#
-#                # 1. filter columns to just columns in sql_types
-#                filtered_columns = [c for c in set(columns) if c in self.sql_types]
-#
-#                # 2. if table has no columns, insert a synthetic 'id' column.
-#                #    'id' maps to a TEXT field.
-#                if len(filtered_columns) == 0:
-#                    filtered_columns = ['id']
-#
-#                # 3. primary key is all the columns minus any primary key exclusions
-#                #    this makes the sql insertions idempotent after the initial insertion
-#                primary_key_columns = list(set(filtered_columns) - set(primary_key_exclusions))
-#
-#                # 4. if there are parent tables on the stack, then walk the stack backwards
-#                #    and find an appropriate parent. children and parent fields contain
-#                #    the name of the target table only, NOT a pointer to the actual table.
-#                parent_name = None
-#                if len(stack) > 1:
-#                    (parent_name, parent_obj) = stack[-2]
-#                    if parent_name is not None and parent_name is not self.root and parent_name is not name:
-#                        if parent_name in self.tables:
-#                            parent_table = self.tables[parent_name]
-#                            parent_children = set(parent_table.children)
-#                            parent_children.add(name)
-#                            parent_table.children = list(parent_children)
-#
-#                # 4. construct the new table and insert
-#                self.tables[name] = Table(
-#                    name=name, 
-#                    columns=filtered_columns, 
-#                    primary_key=primary_key_columns,
-#                    parent=parent_name)
-#
-#                log.debug(self.logger, {
-#                    "name"      : __name__,
-#                    "method"    : "scan_tables.hdol",
-#                    "added_table" : name,
-#                    "table"   : str(self.tables[name]) 
-#                    })
-#
-#
-#        def handle_dict(stack):
-#            """
-#            Dictionaries -> map to Tables
-#            """
-#            (valid_name, obj) = self.find_valid_table_name(stack)
-#            gen_table(valid_name, obj.keys(), stack)
-#
-#        def handle_list(stack):
-#            """
-#            Lists -> map to Tables
-#            """
-#            (valid_name, obj) = self.find_valid_table_name(stack)
-#            # lists have no valid column names
-#            gen_table(valid_name, [], stack)
-#
-#        Walker(self.logger, dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
-#        for k,v in self.tables.items():
-#            log.info(self.logger, {
-#                "name"      : __name__,
-#                "method"    : "scan_tables",
-#                "table_name" : k,
-#                "table"     : str(v)
-#                })
-#        return self
+    def scan_tables(self, primary_key_exclusions):
+        """
+        Recursive Scan to assemble the databases and database relationships.
+        For example, in the XML snippet above we have the following
+        relationships:
+
+            OASISReport -> MessageHeader -> [TimeDate, Source, Version]
+            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_HEADER -> [...]
+            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_DATA -> [...]
+
+        These relationships are represented as FOREIGN KEY references to the
+        'parent' table.  This is especially important in the case of the
+        REPORT_HEADER and REPORT_DATA both pointing to the empty REPORT_ITEM.
+        If REPORT_ITEM did not exist in the schema, then there would be no way
+        to correlate the REPORT_HEADER and the REPORT_DATA.
+
+        Table_columns without any columns will have an 'id TEXT' column
+        injected into them with uuid.uuid4() values.
+
+        Primary keys are constructed from all of the available columns, sans
+        those provided in the 'primary_key_exclusions' parameter. Primary keys
+        are used for data integrity. It is important that re-running the
+        insertions is idempotent after initial insertion. E.g.  once inserted,
+        no new records are inserted.
+
+        See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
+        """
+        assert self.json is not None
+
+        def gen_table(stack, columns):
+            (name, obj, otype) = stack[-1]
+            if name == self.root:
+                return
+            if name not in self.tables:
+                # only process the first time seen, this assumes the
+                # xml is well formed and complete for all elements.
+
+                # 1. filter columns to just columns in sql_types
+                filtered_columns = [c for c in set(columns) if c in self.sql_types]
+
+                # 2. if table has no columns, insert a synthetic 'id' column.
+                #    'id' maps to a TEXT field.
+                if len(filtered_columns) == 0:
+                    filtered_columns = ['id']
+
+                # 3. primary key is all the columns minus any primary key exclusions
+                #    this makes the sql insertions idempotent after the initial insertion
+                primary_key_columns = list(set(filtered_columns) - set(primary_key_exclusions))
+
+                # 4. if there are parent tables on the stack, then walk the stack backwards
+                #    and find an appropriate parent. children and parent fields contain
+                #    the name of the target table only, NOT a pointer to the actual table.
+                parent_name = None
+                if len(stack) > 1:
+                    (parent_name, parent_obj) = stack[-2]
+                    if parent_name is not None and parent_name is not self.root and parent_name is not name:
+                        if parent_name in self.tables:
+                            parent_table = self.tables[parent_name]
+                            parent_children = set(parent_table.children)
+                            parent_children.add(name)
+                            parent_table.children = list(parent_children)
+
+                # 4. construct the new table and insert
+                self.tables[name] = Table(
+                    name=name, 
+                    columns=filtered_columns, 
+                    primary_key=primary_key_columns,
+                    parent=parent_name)
+
+                log.debug(self.logger, {
+                    "name"      : __name__,
+                    "method"    : "scan_tables.hdol",
+                    "added_table" : name,
+                    "table"   : str(self.tables[name]) 
+                    })
+
+
+        def handle_dict(stack):
+            """
+            Dictionaries -> map to Tables
+            """
+            (name, obj, otype) = stack[-1]
+            assert otype == Walker.DICT
+
+            # is name an integer?
+            if SqlTypeEnum.INTEGER == SqlTypeEnum.type_of(name):
+                # this is an anonymous dict that's an element of a list
+                # walk table back until we get to a dict, and use that
+            else:
+                gen_table(stack, obj.keys())
+
+        def handle_list(stack):
+            (name, obj, otype) = stack[-1]
+            assert otype == Walker.LIST
+            #gen_table(stack, [])
+            pass
+
+        Walker(self.logger, dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
+        for k,v in self.tables.items():
+            log.info(self.logger, {
+                "name"      : __name__,
+                "method"    : "scan_tables",
+                "table_name" : k,
+                "table"     : str(v)
+                })
+        return self
         
-#    def find_valid_table_name(self, stack):
-#        """
-#        name will be SqlTyeEnum.INTEGER if this is an anonymous dict in a list
-#        therefore, we cycle back until we find a name that's a string, which 
-#        should be true if the parent is a normal dict
-#        """
-#        (name, obj) = stack[-1]
-#        x = 2
-#        while(SqlTypeEnum.type_of(name) != SqlTypeEnum.TEXT) and x <= len(stack):
-#            (name, ignored) = stack[-x]
-#            x = x + 1
     
-
-    def find_table(self, stack):
-        x = 1
-        while True:
-            if x > len(stack):
-                return (None, None, None)
-            (name, curobj) = stack[-x]
-            if (SqlTypeEnum.type_of(name) == SqlTypeEnum.TEXT) and (isinstance(curobj, dict) or isinstance(curobj, list) and name != self.root):
-                return (name, curobj, -x)
-            x = x + 1
-
-    def find_parent_child_tables(self, stack):
-        (child, obj, cidx) = self.find_table(stack)
-        (parent, pobj, pidx) = self.find_table(stack[:cidx].copy())
-        return (child, obj, parent, pobj)
-
     def table2ddl(self, t):
-        local_column_tuples         = [(self.sqlite_sanitize(c), sql_type_str(self.sql_types[c])) for c in t.columns]
+        local_column_tuples         = [(self.sqlite_sanitize(c), sql_type_str(self.sql_types[c])) for c in t.local_columns]
         parent_column_pname_type    = []
         foreign_key_str_lst         = []
         if t.parent != None and t.parent in self.tables:
             parent = self.tables[t.parent]
-            parent_column_pname_type = ["%s_%s %s"%(self.sqlite_sanitize(parent.name), a,b) for (a,b) in [(self.sqlite_sanitize(c), sql_type_str(self.sql_types[c])) for c in parent.primary_key()]]
-            parent_primary_key_columns = ["%s_%s" % (parent.name, pk) for pk in parent.primary_key()]
+            parent_column_pname_type = ["%s_%s %s"%(self.sqlite_sanitize(parent.name), a,b) for (a,b) in [(self.sqlite_sanitize(c), sql_type_str(self.sql_types[c])) for c in parent.primary_key]]
+            parent_primary_key_columns = ["%s_%s" % (parent.name, pk) for pk in parent.primary_key]
             foreign_key_str_lst.append("FOREIGN KEY ({foreign_keys}) REFERENCES {parent_table}({parent_pk_cols})".format(
                 parent_table=self.sqlite_sanitize(parent.name),
                 foreign_keys=", ".join(self.sqlite_sanitize_all(parent_primary_key_columns)),
-                parent_pk_cols=", ".join(self.sqlite_sanitize_all(parent.primary_key()))))
+                parent_pk_cols=", ".join(self.sqlite_sanitize_all(parent.primary_key))))
         all_columns = []
         all_columns.extend(local_column_tuples)
         all_columns_lst = ["%s %s"%(a,b) for (a,b) in all_columns]
@@ -482,7 +422,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         return "CREATE TABLE IF NOT EXISTS {name} ({columns}, PRIMARY KEY ({primary_key}));".format(
                 name=self.sqlite_sanitize(t.name), 
                 columns=", ".join(all_columns_lst),
-                primary_key=", ".join(self.sqlite_sanitize_all(t.primary_key())))
+                primary_key=", ".join(self.sqlite_sanitize_all(t.primary_key)))
 
     def ddl(self):
         for name, table in self.tables.items():
@@ -497,33 +437,18 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         retval = []
 
         def sql(name, columns, values):
-            #print(columns)
-            #print(values)
-            sql_txt = """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
-            print(sql_txt)
-            return sql_txt
+            return """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
        
-        def get_kv(keys:list, obj:dict):
-            assert isinstance(obj, dict)
+        def get_kv(keys, obj):
             sortedkeys = sorted(keys)
-            for sk in sortedkeys:
-                if sk not in obj:
-                    raise Exception("ERROR: sk: '%s' not in obj keys: '%s'" % (sk, obj.keys()))
             values = [obj[k] for k in sortedkeys]
             return (sortedkeys, values)
 
-        def handle_list(stack):
-            (name, obj) = stack[-1]
-            t = self.tables[name]
-            if t.columns == {'id'}:
-                synthetic_id = str(uuid.uuid4())
-                t.last_id = synthetic_id
-
         def handle_dict(stack):
-            (realname, obj) = stack[-1]
-            if realname == self.root:
+            (name, obj) = stack[-1]
+
+            if name == self.root:
                 return
-            (name, _, parent_name, pobj) = self.find_parent_child_tables(stack)
 
             t = self.tables[name]
 
@@ -532,23 +457,18 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             parent_pk_keys      = []
             parent_pk_values    = []
 
-            if t.primary_key() == ['id'] and 'id' not in obj.keys():
-                synthetic_id = str(uuid.uuid4())
-                obj['id'] = synthetic_id
-                t.last_id = synthetic_id
+            if t.primary_key == ['id'] and 'id' not in obj.keys():
+                obj['id'] = str(uuid.uuid4())
 
-            if t.parent is not None and t.parent != self.root and t.parent == parent_name and parent_name in self.tables:
-                parent_t = self.tables[parent_name]
-                parent_pk = parent_t.primary_key()
-                if isinstance(pobj, list):
-                    assert parent_pk == ['id']
-                    assert parent_t.last_id is not None
-                    parent_pk_keys = parent_pk
-                    parent_pk_values = [parent_t.last_id]
-                else:
-                    (parent_pk_keys, parent_pk_values) = get_kv(parent_pk, pobj)
+            if t.parent is not None and t.parent in self.tables and len(stack) > 1:
+                for i in range(len(stack)-1, 0, -1):
+                    (pname, pobj) = stack[i]
+                    if pname == t.parent:
+                        pt = self.tables[t.parent]
+                        (parent_pk_keys, parent_pk_values) = get_kv(pt.primary_key, pobj)
+                        break
 
-            (local_keys, local_values) = get_kv(t.columns, obj)
+            (local_keys, local_values) = get_kv(t.local_columns, obj)
 
             columns = []
             columns.extend(self.sqlite_sanitize_all(local_keys))
@@ -560,7 +480,6 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             
             retval.append(sql(name, columns, values))
 
-        #Walker(self.logger, dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
         Walker(self.logger, dict_handler_func=handle_dict).walk(self.root, self.json)
         return retval
 
@@ -633,7 +552,7 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
         total_sql = 0
         with open(outfile, 'w') as outfh:
             with open(os.path.join(input_dir, xml_input_file_name), 'r') as infh:
-                xst = XML2SQLTransormer(chlogger, infh).parse(xml_namespace).scan_all(pk_exclusions)
+                xst = XML2SQLTransormer(chlogger, infh).parse(xml_namespace).scan_types().scan_tables(pk_exclusions)
                 for d in xst.ddl():
                     outfh.write("%s\n" % d)
                     total_ddl += 1
@@ -676,7 +595,7 @@ if __name__ == "__main__":
         "src"       : "xmlparser.py"
         })
     with open(infile, 'r') as f:
-        xst = XML2SQLTransormer(logger, f).parse().scan_all(['value'])
+        xst = XML2SQLTransormer(logger, f).parse().scan_types().scan_tables(['value'])
         for d in xst.ddl():
             print(d)
         for sql in xst.insertion_sql():
