@@ -147,7 +147,7 @@ def status(logger, feed, ed_path, separator, header):
             })
     if header:
         yield separator.join(["feed name","downloaded","unzipped","parsed", "inserted"])
-    txtfiles = ["zip/downloaded.txt", "xml/unzipped.txt", "sql/parsed.txt", "db/inserted.txt"]
+    txtfiles = ["zip/state.txt", "xml/state.txt", "sql/state.txt", "db/state.txt"]
     counts = [str(lines_in_file(os.path.join(target_dir, f))) for f in txtfiles]
     status = [feed]
     status.extend(counts)
