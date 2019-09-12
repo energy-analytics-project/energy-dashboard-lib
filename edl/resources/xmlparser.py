@@ -497,10 +497,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         retval = []
 
         def sql(name, columns, values):
-            #print(columns)
-            #print(values)
             sql_txt = """INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values});""".format(table=name, columns=", ".join(columns), values=", ".join(values))
-            print(sql_txt)
             return sql_txt
        
         def get_kv(keys:list, obj:dict):
