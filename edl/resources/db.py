@@ -21,7 +21,7 @@ def insert(logger, resource_name, sql_dir, db_dir, db_name, new_files):
             sqlfile = os.path.join(sql_dir, new_file) 
             try:
                 with open(sqlfile, 'r') as sf:
-                    log.debug(chlogger, {
+                    log.info(chlogger, {
                         "name"      : __name__,
                         "src"       : resource_name, 
                         "method"    : "insert",
@@ -34,7 +34,7 @@ def insert(logger, resource_name, sql_dir, db_dir, db_name, new_files):
                         "message"   : "started",
                         })
                     cnx.executescript(sf.read())
-                    log.debug(chlogger, {
+                    log.info(chlogger, {
                         "name"      : __name__,
                         "src"       : resource_name, 
                         "method"    : "insert",
@@ -58,6 +58,6 @@ def insert(logger, resource_name, sql_dir, db_dir, db_name, new_files):
                     "new_files" : new_files_count,
                     "file_idx"  : idx,
                     "sql_file"  : sqlfile,
-                    "ERROR":"insert failed",
+                    "ERROR":"insert of sql_file failed",
                     "exception": str(e),
                     })

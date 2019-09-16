@@ -249,21 +249,6 @@ def process_all_stages(logger, feed, ed_path):
     for src_file in found_src_files:
         yield process_file(logger, feed, ed_path, src_file)
 
-def process_file(logger, feed, ed_path, src_file):
-    chlogger    = logger.getChild(__name__)
-    feed_dir    = os.path.join(ed_path, 'data', feed)
-    rel_path    = os.path.join("src", src_file)
-    cmd         = "%s %s" % (rel_path,  log.LOGGING_LEVEL_STRINGS[chlogger.getEffectiveLevel()])
-
-    log.debug(chlogger, {
-            "name"      : __name__,
-            "method"    : "process_file",
-            "path"      : ed_path,
-            "feed"      : feed,
-            "cmd"       : cmd
-        })
-    return runyield(cmd, feed_dir)
-
 def process_stages(logger, feed, ed_path, stages):
     chlogger = logger.getChild(__name__)
     stage_files = sorted([STAGE_PROCS[s] for s in stages])
@@ -280,6 +265,22 @@ def process_stages(logger, feed, ed_path, stages):
                     "src_files" : src_files,
                     "ERROR"     : "stage_file not in src_files"
                 })
+
+def process_file(logger, feed, ed_path, src_file):
+    chlogger    = logger.getChild(__name__)
+    feed_dir    = os.path.join(ed_path, 'data', feed)
+    rel_path    = os.path.join("src", src_file)
+    cmd         = "%s %s" % (rel_path,  log.LOGGING_LEVEL_STRINGS[chlogger.getEffectiveLevel()])
+
+    log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "process_file",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "cmd"       : cmd
+        })
+    return runyield(cmd, feed_dir)
+
 
 def archive_locally(logger, feed, ed_path, archivedir):
     chlogger = logger.getChild(__name__)

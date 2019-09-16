@@ -555,7 +555,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             values.extend(self.sqlite_sanitize_values(local_keys, local_values))
             values.extend(self.sqlite_sanitize_values(parent_pk_keys, parent_pk_values))
             
-            retval.append(sql(name, columns, values))
+            retval.append(sql(self.sqlite_sanitize(name), columns, values))
 
         #Walker(self.logger, dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
         Walker(self.logger, dict_handler_func=handle_dict).walk(self.root, self.json)
