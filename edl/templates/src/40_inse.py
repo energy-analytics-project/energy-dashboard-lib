@@ -47,10 +47,9 @@ def run(logger, manifest, config):
     sql_dir         = config['source_dir']
     db_dir          = config['working_dir']
     state_file      = config['state_file']
-    db_name         = "%s.db" % resource_name
     new_files = state.new_files(resource_name, state_file, sql_dir, '.sql')
     state.update(
-                db.insert(logger, resource_name, sql_dir, db_dir, db_name, new_files),
+                db.insert(logger, resource_name, sql_dir, db_dir, new_files),
                 state_file)
 
 # -----------------------------------------------------------------------------

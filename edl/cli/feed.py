@@ -346,18 +346,33 @@ def restore_locally(logger, feed, ed_path, archive):
                     "exception" : str(e)
                     })
 
-def archive_to_s3(logger, feed, ed_path, service):
+def archive_to_s3(logger, feed, ed_path, service, operation):
     """
     Archive feed to an S3 bucket.
     """
     chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    cmd         = "rclone copy --verbose --include=\"zip/*.zip\" --include=\"db/*.db\" %s %s:%s" % (feed_dir, service, s3_dir)
-    log.debug(chlogger, {
+    if operation == "copy":
+        cmd         = "rclone copy --verbose --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
+    elif operation == "sync":
+        cmd         = "rclone sync --verbose %s %s:%s" % (feed_dir, service, s3_dir)
+    else:
+        log.critical(chlogger, {
             "name"      : __name__,
             "method"    : "archive_to_s3",
             "path"      : ed_path,
+            "op"        : operation,
+            "feed"      : feed,
+            "s3_dir"    : s3_dir,
+            "cmd"       : cmd,
+            "ERROR"     : "unknown operation"
+            })
+    log.info(chlogger, {
+            "name"      : __name__,
+            "method"    : "archive_to_s3",
+            "path"      : ed_path,
+            "op"        : operation,
             "feed"      : feed,
             "s3_dir"    : s3_dir,
             "cmd"       : cmd,
