@@ -464,13 +464,15 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         s_values = []
         for (c,v) in zip(columns, values):
             if v is None:
-                s_values.append("")
+                s_values.append("\"\"")
             elif c in self.sql_types:
                 if self.sql_types[c] == SqlTypeEnum.NULL:
-                    s_values.append("")
+                    s_values.append(v)
                 elif self.sql_types[c] == SqlTypeEnum.TEXT:
                     s_values.append(self.quote_identifier(v))
-                elif self.sql_types[c] == SqlTypeEnum.INTEGER or v == SqlTypeEnum.REAL:
+                elif self.sql_types[c] == SqlTypeEnum.INTEGER:
+                    s_values.append(v)
+                elif self.sql_types[c] == SqlTypeEnum.REAL:
                     s_values.append(v)
                 elif self.sql_types[c] == SqlTypeEnum.BLOB:
                     s_values.append(base64.b64encode(v))
@@ -485,11 +487,13 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
                         })
             else:
                 vtype = SqlTypeEnum.type_of(v)
-                if v == SqlTypeEnum.NULL:
-                    s_values.append("")
-                elif v == SqlTypeEnum.TEXT:
+                if vtype == SqlTypeEnum.NULL:
+                    s_values.append(v)
+                elif vtype == SqlTypeEnum.TEXT:
                     s_values.append(self.quote_identifier(v))
-                elif v == SqlTypeEnum.INTEGER or v == SqlTypeEnum.REAL:
+                elif vtype == SqlTypeEnum.INTEGER:
+                    s_values.append(v)
+                elif vtype == SqlTypeEnum.REAL:
                     s_values.append(v)
                 elif v == SqlTypeEnum.BLOB:
                     s_values.append(base64.b64encode(v))
