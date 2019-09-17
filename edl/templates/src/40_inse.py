@@ -64,6 +64,15 @@ def run(logger, manifest, config):
     db_dir          = config['working_dir']
     state_file      = config['state_file']
     new_files = state.new_files(resource_name, state_file, sql_dir, '.sql')
+    log.debug(logger, {
+        "name"      : __name__,
+        "method"    : "run",
+        "resource"  : resource_name,
+        "sql_dir"   : sql_dir,
+        "db_dir"    : db_dir,
+        "state_file": state_file,
+        "new_files_count" : len(new_files),
+        })
     state.update(
                 db.insert(logger, resource_name, sql_dir, db_dir, new_files),
                 state_file)
@@ -79,7 +88,7 @@ if __name__ == "__main__":
     log.configure_logging()
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "main",
         "src"       : "40_inse.py"

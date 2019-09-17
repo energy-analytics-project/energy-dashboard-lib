@@ -72,11 +72,12 @@ def run(logger, manifest, config):
     # sleep for N seconds in between downloads to meet caiso expected use requirements
     dates   = xtime.range_pairs(xtime.day_range_to_today(start_date))
     urls    = list(web.generate_urls(logger, dates, resource_url))
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "run",
         "resource"  : resource_name,
         "url"       : resource_url,
+        "delay"     : delay,
         "download_dir": download_dir,
         "state_file": state_file,
         "start_date": str(start_date),
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     log.configure_logging()
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "main",
         "src"       : "10_down.py"

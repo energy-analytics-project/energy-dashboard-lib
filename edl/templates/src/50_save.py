@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/env python3
 # edl : common library for the energy-dashboard tool-chain
 # Copyright (C) 2019  Todd Greenwood-Geer (Enviro Software Solutions, LLC)
 # 
@@ -15,8 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-set -x
 
-git add db/
-git commit -am "update db"
-git push
+import os
+
+os.system("git add db/")
+os.system("git commit -am \"update db\"")
+os.system("git push")

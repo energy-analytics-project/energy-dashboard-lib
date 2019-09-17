@@ -64,7 +64,7 @@ def run(logger, manifest, config):
     sql_dir         = config['working_dir']
     state_file      = config['state_file']
     new_files = state.new_files(resource_name, state_file, xml_dir, '.xml')
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "run",
         "resource"  : resource_name,
@@ -73,6 +73,7 @@ def run(logger, manifest, config):
         "xml_namespace"   : xml_namespace,
         "xml_dir"   : xml_dir,
         "sql_dir"   : sql_dir,
+        "state_file": state_file,
         "new_files_count" : len(new_files),
         })
     state.update(
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     log.configure_logging()
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "main",
         "src"       : "30_pars.py"

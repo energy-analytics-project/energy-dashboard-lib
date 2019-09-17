@@ -28,7 +28,7 @@ import re
 
 STAGES  = ['download', 'unzip', 'parse', 'insert']
 DIRS    = ['zip', 'xml', 'sql', 'db']
-PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.sh']
+PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.py']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
 def create(logger, ed_path, feed, maintainer, company, email, url, start_date, delay):
@@ -50,7 +50,7 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date, d
         template_files = [
                 "LICENSE","Makefile","README.md",
                 "src/10_down.py","src/20_unzp.py","src/30_pars.py",
-                "src/40_inse.py", "src/50_save.sh", "manifest.json"
+                "src/40_inse.py", "src/50_save.py", "manifest.json"
                 ]
         env = Environment(
             loader=PackageLoader('edl', 'templates'),

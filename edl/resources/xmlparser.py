@@ -327,141 +327,6 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
                 })
         return self
 
-#    def scan_types(self):
-#        """
-#        Recursive scan to build the types.
-#        """
-#        def handle_item(stack):
-#            (name, obj) = stack[-1]
-#            if name not in self.sql_types:
-#                sqltype = SqlTypeEnum.type_of(obj)
-#                self.sql_types[name] = sqltype
-#                self.sql_types[self.sqlite_sanitize(name)] = sqltype
-#
-#        Walker(self.logger, item_handler_func=handle_item).walk(self.root, self.json)
-#        for k,v in self.sql_types.items():
-#            log.debug(self.logger, {
-#                "name"      : __name__,
-#                "method"    : "scan_types",
-#                "column"    : str(k),
-#                "type"      : sql_type_str(v)
-#                })
-#        return self
-#
-#    def scan_tables(self, primary_key_exclusions):
-#        """
-#        Recursive Scan to assemble the databases and database relationships.
-#        For example, in the XML snippet above we have the following
-#        relationships:
-#
-#            OASISReport -> MessageHeader -> [TimeDate, Source, Version]
-#            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_HEADER -> [...]
-#            OASISReport -> MessagePayload -> RTO -> REPORT_ITEM -> REPORT_DATA -> [...]
-#
-#        These relationships are represented as FOREIGN KEY references to the
-#        'parent' table.  This is especially important in the case of the
-#        REPORT_HEADER and REPORT_DATA both pointing to the empty REPORT_ITEM.
-#        If REPORT_ITEM did not exist in the schema, then there would be no way
-#        to correlate the REPORT_HEADER and the REPORT_DATA.
-#
-#        Table_columns without any columns will have an 'id TEXT' column
-#        injected into them with uuid.uuid4() values.
-#
-#        Primary keys are constructed from all of the available columns, sans
-#        those provided in the 'primary_key_exclusions' parameter. Primary keys
-#        are used for data integrity. It is important that re-running the
-#        insertions is idempotent after initial insertion. E.g.  once inserted,
-#        no new records are inserted.
-#
-#        See: https://stackoverflow.com/questions/38397285/iterate-over-all-items-in-json-object#38397347
-#        """
-#        assert self.json is not None
-#
-#        def gen_table(name, columns, stack):
-#            if name == self.root:
-#                return
-#            if name not in self.tables:
-#                # only process the first time seen, this assumes the
-#                # xml is well formed and complete for all elements.
-#
-#                # 1. filter columns to just columns in sql_types
-#                filtered_columns = [c for c in set(columns) if c in self.sql_types]
-#
-#                # 2. if table has no columns, insert a synthetic 'id' column.
-#                #    'id' maps to a TEXT field.
-#                if len(filtered_columns) == 0:
-#                    filtered_columns = ['id']
-#
-#                # 3. primary key is all the columns minus any primary key exclusions
-#                #    this makes the sql insertions idempotent after the initial insertion
-#                primary_key_columns = list(set(filtered_columns) - set(primary_key_exclusions))
-#
-#                # 4. if there are parent tables on the stack, then walk the stack backwards
-#                #    and find an appropriate parent. children and parent fields contain
-#                #    the name of the target table only, NOT a pointer to the actual table.
-#                parent_name = None
-#                if len(stack) > 1:
-#                    (parent_name, parent_obj) = stack[-2]
-#                    if parent_name is not None and parent_name is not self.root and parent_name is not name:
-#                        if parent_name in self.tables:
-#                            parent_table = self.tables[parent_name]
-#                            parent_children = set(parent_table.children)
-#                            parent_children.add(name)
-#                            parent_table.children = list(parent_children)
-#
-#                # 4. construct the new table and insert
-#                self.tables[name] = Table(
-#                    name=name, 
-#                    columns=filtered_columns, 
-#                    primary_key=primary_key_columns,
-#                    parent=parent_name)
-#
-#                log.debug(self.logger, {
-#                    "name"      : __name__,
-#                    "method"    : "scan_tables.hdol",
-#                    "added_table" : name,
-#                    "table"   : str(self.tables[name]) 
-#                    })
-#
-#
-#        def handle_dict(stack):
-#            """
-#            Dictionaries -> map to Tables
-#            """
-#            (valid_name, obj) = self.find_valid_table_name(stack)
-#            gen_table(valid_name, obj.keys(), stack)
-#
-#        def handle_list(stack):
-#            """
-#            Lists -> map to Tables
-#            """
-#            (valid_name, obj) = self.find_valid_table_name(stack)
-#            # lists have no valid column names
-#            gen_table(valid_name, [], stack)
-#
-#        Walker(self.logger, dict_handler_func=handle_dict, list_handler_func=handle_list).walk(self.root, self.json)
-#        for k,v in self.tables.items():
-#            log.info(self.logger, {
-#                "name"      : __name__,
-#                "method"    : "scan_tables",
-#                "table_name" : k,
-#                "table"     : str(v)
-#                })
-#        return self
-        
-#    def find_valid_table_name(self, stack):
-#        """
-#        name will be SqlTyeEnum.INTEGER if this is an anonymous dict in a list
-#        therefore, we cycle back until we find a name that's a string, which 
-#        should be true if the parent is a normal dict
-#        """
-#        (name, obj) = stack[-1]
-#        x = 2
-#        while(SqlTypeEnum.type_of(name) != SqlTypeEnum.TEXT) and x <= len(stack):
-#            (name, ignored) = stack[-x]
-#            x = x + 1
-    
-
     def find_table(self, stack):
         x = 1
         while True:
@@ -597,10 +462,15 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
     def sqlite_sanitize_values(self, columns, values):
         s_values = []
         for (c,v) in zip(columns, values):
-            if SqlTypeEnum.type_of(v) == SqlTypeEnum.TEXT:
-                s_values.append(self.quote_identifier(v))
-            else:
+            if self.sql_types[c] == SqlTypeEnum.Text:
+                if v is None:
+                    s_values.append("")
+                else:
+                    s_values.append(self.quote_identifier(v))
+            elif self.sql_types[c] == SqlTypeEnum.INTEGER or self.sql_types[c] == SqlTypeEnum.REAL:
                 s_values.append(v)
+            else:
+                s_values.append(self.quote_identifier(v))
         return s_values
 
     def sqlite_sanitize_all(self, l):
@@ -662,9 +532,10 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
             })
         return xml_input_file_name
     except Exception as e:
-        tb = traceback.format_exc()
-        print(tb)
-        log.critical(chlogger, {
+        if chlogger.isEnabledFor(logging.DEBUG):
+            tb = traceback.format_exc()
+            print(tb)
+        log.error(chlogger, {
             "src":resource_name, 
             "action":"parse",
             "xml_file":xml_input_file_name,
@@ -682,7 +553,7 @@ if __name__ == "__main__":
     log.configure_logging()
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "main",
         "src"       : "xmlparser.py"

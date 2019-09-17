@@ -64,13 +64,14 @@ def run(logger, manifest, config):
     state_file      = config['state_file']
     resource_url    = manifest['url']
     new_files = state.new_files(resource_name, state_file, zip_dir, '.zip')
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "run",
         "resource"  : resource_name,
         "url"       : resource_url,
         "xml_dir"   : xml_dir,
         "zip_dir"   : zip_dir,
+        "state_file": state_file,
         "new_files_count" : len(new_files),
         })
     state.update(
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     log.configure_logging()
     logger = logging.getLogger(__name__)
     logger.setLevel(loglevel)
-    log.info(logger, {
+    log.debug(logger, {
         "name"      : __name__,
         "method"    : "main",
         "src"       : "20_unzp.py"
