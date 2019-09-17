@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import base64
 import traceback
 from enum import Enum
 import codecs
@@ -281,8 +282,8 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         Parse the loaded xmlfile and load into the self.json object.
         """
         self.json = xmltodict.parse(self.xmlfile.read(), process_namespaces=True, namespaces={xml_namespace: None})
-        if self.logger.isEnabledFor(logging.DEBUG):
-            print(json.dumps(self.json, indent=4, sort_keys=True))
+        #if self.logger.isEnabledFor(logging.DEBUG):
+        #    print(json.dumps(self.json, indent=4, sort_keys=True))
         # allow method chaining
         return self
 
@@ -462,15 +463,46 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
     def sqlite_sanitize_values(self, columns, values):
         s_values = []
         for (c,v) in zip(columns, values):
-            if self.sql_types[c] == SqlTypeEnum.Text:
-                if v is None:
+            if v is None:
+                s_values.append("")
+            elif c in self.sql_types:
+                if self.sql_types[c] == SqlTypeEnum.NULL:
                     s_values.append("")
-                else:
+                elif self.sql_types[c] == SqlTypeEnum.TEXT:
                     s_values.append(self.quote_identifier(v))
-            elif self.sql_types[c] == SqlTypeEnum.INTEGER or self.sql_types[c] == SqlTypeEnum.REAL:
-                s_values.append(v)
+                elif self.sql_types[c] == SqlTypeEnum.INTEGER or v == SqlTypeEnum.REAL:
+                    s_values.append(v)
+                elif self.sql_types[c] == SqlTypeEnum.BLOB:
+                    s_values.append(base64.b64encode(v))
+                else:
+                    log.error(self.logger, {
+                        "name"      : __name__,
+                        "method"    : "sqlite_sanitize_values",
+                        "column"    : str(c),
+                        "value"     : str(v),
+                        "sql_types" : str(self.sql_types),
+                        "ERROR"     : "Known column type but failed to sanitize value anyway",
+                        })
             else:
-                s_values.append(self.quote_identifier(v))
+                vtype = SqlTypeEnum.type_of(v)
+                if v == SqlTypeEnum.NULL:
+                    s_values.append("")
+                elif v == SqlTypeEnum.TEXT:
+                    s_values.append(self.quote_identifier(v))
+                elif v == SqlTypeEnum.INTEGER or v == SqlTypeEnum.REAL:
+                    s_values.append(v)
+                elif v == SqlTypeEnum.BLOB:
+                    s_values.append(base64.b64encode(v))
+                else:
+                    log.error(self.logger, {
+                        "name"      : __name__,
+                        "method"    : "sqlite_sanitize_values",
+                        "column"    : str(c),
+                        "value"     : str(v),
+                        "sql_types" : str(self.sql_types),
+                        "ERROR"     : "Value type not in sql_types, not matched to SqlTypeEnum, data inconsistency",
+                        })
+
         return s_values
 
     def sqlite_sanitize_all(self, l):
@@ -532,9 +564,9 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
             })
         return xml_input_file_name
     except Exception as e:
-        if chlogger.isEnabledFor(logging.DEBUG):
-            tb = traceback.format_exc()
-            print(tb)
+        #if chlogger.isEnabledFor(logging.DEBUG):
+        tb = traceback.format_exc()
+        print(tb)
         log.error(chlogger, {
             "src":resource_name, 
             "action":"parse",
