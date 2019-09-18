@@ -404,7 +404,7 @@ def restore_from_s3(logger, feed, ed_path, service):
     that approach.
 
     Here's the brute force solution. Use the download state file,
-    'unzipped.txt', to direct the download operations.  
+    'xml/state.txt', to direct the download operations.  
     """
     chlogger    = logger.getChild(__name__)
 
@@ -417,7 +417,7 @@ def restore_from_s3(logger, feed, ed_path, service):
     outdir      = os.path.join(feed_dir, 'zip')
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     try:
-        with open(os.path.join(feed_dir, 'xml', 'unzipped.txt'), 'r') as zipfiles:
+        with open(os.path.join(feed_dir, 'xml', 'state.txt'), 'r') as zipfiles:
             for zf in zipfiles:
                 zf = zf.rstrip()
                 s3_file = "%s/zip/%s" % (s3_dir, zf)
