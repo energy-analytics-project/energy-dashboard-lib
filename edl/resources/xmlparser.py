@@ -277,13 +277,33 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         self.root               = 'root'
         """root : name of the root node which is really the document root, for which no table is generated"""
 
-    def parse(self, xml_namespace):
+    def parse(self):
         """
         Parse the loaded xmlfile and load into the self.json object.
         """
-        self.json = xmltodict.parse(self.xmlfile.read(), process_namespaces=True, namespaces={xml_namespace: None})
-        #if self.logger.isEnabledFor(logging.DEBUG):
-        #    print(json.dumps(self.json, indent=4, sort_keys=True))
+        blob = xmltodict.parse(self.xmlfile.read(), process_namespaces=False)
+        # walk the json and rename names w/o 'foo:bar' namespace prefixes.
+        def owalk(obj):
+            def rename(d):
+                new_dict = {}
+                for key, value in zip(d.keys(), d.values()):
+                    try:
+                        new_key = key[key.index(":") +1:]
+                    except:
+                        new_key = key
+                    new_dict[new_key] = d[key]
+                return new_dict
+            if isinstance(obj, dict):
+                obj = rename(obj)
+                for k, v in obj.items():
+                    obj[k] = owalk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    item = owalk(item)
+            return obj
+        self.json = owalk(blob)
+        if self.logger.isEnabledFor(logging.DEBUG):
+            print(json.dumps(self.json, indent=4, sort_keys=True))
         # allow method chaining
         return self
 
@@ -536,11 +556,11 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             return None
         return parent
 
-def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusions, xml_namespace):
+def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusions):
     for f in input_files:
-        yield parse_file(logger, resource_name, f, input_dir, output_dir, pk_exclusions, xml_namespace)
+        yield parse_file(logger, resource_name, f, input_dir, output_dir, pk_exclusions)
 
-def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions, xml_namespace):
+def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions):
     chlogger = logger.getChild(__name__)
     try:
         if not os.path.exists(output_dir):
@@ -551,7 +571,7 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
         total_sql = 0
         with open(outfile, 'w') as outfh:
             with open(os.path.join(input_dir, xml_input_file_name), 'r') as infh:
-                xst = XML2SQLTransormer(chlogger, infh).parse(xml_namespace).scan_all(pk_exclusions)
+                xst = XML2SQLTransormer(chlogger, infh).parse().scan_all(pk_exclusions)
                 for d in xst.ddl():
                     outfh.write("%s\n" % d)
                     total_ddl += 1
