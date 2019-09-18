@@ -25,12 +25,15 @@ import stat
 import sys
 import tarfile
 import re
+import requests
 
 STAGES  = ['download', 'unzip', 'parse', 'insert']
 DIRS    = ['zip', 'xml', 'sql', 'db']
 PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.py']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
+
+
 def create(logger, ed_path, feed, maintainer, company, email, url, start_date, delay):
     """
     start_date : list of numbers : [2019,09,1]
