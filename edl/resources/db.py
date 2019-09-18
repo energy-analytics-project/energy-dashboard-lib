@@ -14,6 +14,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""
+(edc-cli) toddg@beast:~/proj/energy-dashboard$ edc feed data-oasis-atl-ruc-zone-map proc insert
+{"ts":"09/18/2019 04:12:54 PM", "msg":{"name": "edl.resources.db", "src": "data-oasis-atl-ruc-zone-map", "method": "insert", "sql_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql", "db_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "new_files": 99}}
+Traceback (most recent call last):
+  File "src/40_inse.py", line 98, in <module>
+    run(logger, m, config())
+  File "src/40_inse.py", line 78, in run
+    state_file)
+  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/state.py", line 22, in update
+    for item in generator:
+  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/db.py", line 34, in insert
+    yield insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, depth=0, max_depth=5)
+  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/db.py", line 56, in insert_file
+    with sqlite3.connect(os.path.join(db_dir, db_name)) as cnx:
+sqlite3.OperationalError: unable to open database file
+"""
+
+
 import os
 import logging
 import sqlite3
@@ -22,6 +40,10 @@ from edl.resources import log
 def insert(logger, resource_name, sql_dir, db_dir, new_files):
     chlogger = logger.getChild(__name__)
     new_files_count = len(new_files)
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir)
+    if not os.path.exists(db_dir):
+        raise Exception("Failed to create db_dir: %s" % db_dir)
     log.info(chlogger, {
         "name"      : __name__,
         "src"       : resource_name, 
