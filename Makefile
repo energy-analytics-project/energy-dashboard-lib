@@ -11,8 +11,8 @@ help:
 	#	clean		: remove build artifacts
 	#	setup		: create the conda environment
 	#	build		: build from source
-	#	test-publish	: publish build artifacts to test pypi
-	#	prod-publish	: publish build artifacts to prod pypi
+	#	test-publish	: publish build artifacts to test pypi (conda activate eap-dev first)
+	#	prod-publish	: publish build artifacts to prod pypi (conda activate eap-dev first)
 	#
 	# -----------------------------------------------------------------------------
 
