@@ -26,6 +26,7 @@ import sys
 import tarfile
 import re
 import requests
+import json
 
 STAGES  = ['download', 'unzip', 'parse', 'insert', 'save']
 DIRS    = ['zip', 'xml', 'sql', 'db']
@@ -562,3 +563,20 @@ def create_and_save_ddl(logger, feed, ed_path, xmlfile, save):
             f.write(json.dumps(obj, indent=4, sort_keys=True))
     return ddl
 
+def manifest_update(logger, feed, ed_path, field, value_str, value_int):
+    """
+    Update the manifest.field with the value provided.
+    """
+    feed_dir    = os.path.join(ed_path, 'data', feed)
+    manifest    = os.path.join(feed_dir, 'manifest.json')
+
+    value = value_str or value_int
+
+    with open(manifest, 'r') as f:
+        obj = json.loads(f.read())
+    if value == None or value == "":
+        obj.pop(field, None)
+    else:
+        obj[field] = value
+    with open(manifest, 'w') as f:
+        f.write(json.dumps(obj, indent=4, sort_keys=True))
