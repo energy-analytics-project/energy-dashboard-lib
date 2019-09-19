@@ -255,6 +255,8 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
     https://sqlite.org/foreignkeys.html
     https://docs.python.org/3/library/json.html
     """
+    NULL_MIGRATION = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT, SqlTypeEnum.BLOB]) 
+    BLOB_MIGRATION = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT]) 
     def __init__(self, logger, xmlfile):
         """
         Following 'Elegant Objects' style, constructor only sets vars. All
@@ -294,14 +296,28 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         """
         def handle_list_or_dict(stack):
             (child_name, obj, parent_name, pobj) = self.find_parent_child_tables(stack)
-            if child_name not in self.tables and child_name != self.root:
+            if child_name == self.root:
+                return
+            if child_name not in self.tables:
                 self.tables[child_name] = Table(name=child_name, parent=parent_name, exclusions=exclusions)
-
         def handle_item(stack):
             (item_name, obj) = stack[-1]
             if item_name not in self.sql_types:
                 sqltype = SqlTypeEnum.type_of(obj)
                 self.sql_types[item_name] = sqltype
+            else:
+                # item_name was already in sql_types, but here we need to allow some flexibilty.
+                # bad formatted xml with blanks or nulls or missing data will leave the item type as NULL
+                # when we know from later data that the type is actually more specific.
+                # so here we allow NULL to be upgraded to something else.
+                # allow NULL -> REAL, INTEGER, TEXT, BLOB
+                # allow BLOB -> REAl, INTEGER, TEXT
+                existing_type = self.sql_types[item_name]
+                new_type = SqlTypeEnum.type_of(obj)
+                if existing_type == SqlTypeEnum.NULL and new_type in XML2SQLTransormer.NULL_MIGRATION:
+                    self.sql_types[item_name] = new_type
+                elif existing_type == SqlTypeEnum.BLOB and new_type in XML2SQLTransormer.BLOB_MIGRATION:
+                    self.sql_types[item_name] = new_type
             # add item to the table columns
             (child_name, obj, parent_name, pobj) = self.find_parent_child_tables(stack)
             t = self.tables[child_name]
@@ -462,51 +478,47 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         return "\"" + encodable.replace("\"", "\"\"") + "\""
 
     def sqlite_sanitize_values(self, columns, values):
+        def _sani_by_type(t, v):
+            if v == None:
+                s_values.append("")
+            else:
+                if t == SqlTypeEnum.NULL:
+                    s_values.append(self.quote_identifier(v))
+                elif t == SqlTypeEnum.TEXT:
+                    s_values.append(self.quote_identifier(v))
+                elif t == SqlTypeEnum.INTEGER:
+                    s_values.append(v)
+                elif t == SqlTypeEnum.REAL:
+                    s_values.append(v)
+                elif t == SqlTypeEnum.BLOB:
+                    s_values.append(base64.b64encode(v))
+                else:
+                    log.error(self.logger, {
+                        "name"      : __name__,
+                        "method"    : "sqlite_sanitize_values._sani_by_type",
+                        "column"    : str(c),
+                        "value"     : str(v),
+                        "type"      : str(t),
+                        "sql_types" : str(self.sql_types),
+                        "ERROR"     : "Failed to sanitize value",
+                        })
+
         s_values = []
         for (c,v) in zip(columns, values):
-            if v is None:
-                s_values.append("\"\"")
-            elif c in self.sql_types:
-                if self.sql_types[c] == SqlTypeEnum.NULL:
-                    s_values.append(v)
-                elif self.sql_types[c] == SqlTypeEnum.TEXT:
-                    s_values.append(self.quote_identifier(v))
-                elif self.sql_types[c] == SqlTypeEnum.INTEGER:
-                    s_values.append(v)
-                elif self.sql_types[c] == SqlTypeEnum.REAL:
-                    s_values.append(v)
-                elif self.sql_types[c] == SqlTypeEnum.BLOB:
-                    s_values.append(base64.b64encode(v))
-                else:
-                    log.error(self.logger, {
-                        "name"      : __name__,
-                        "method"    : "sqlite_sanitize_values",
-                        "column"    : str(c),
-                        "value"     : str(v),
-                        "sql_types" : str(self.sql_types),
-                        "ERROR"     : "Known column type but failed to sanitize value anyway",
-                        })
+            if c in self.sql_types:
+                _sani_by_type(self.sql_types[c], v)
             else:
-                vtype = SqlTypeEnum.type_of(v)
-                if vtype == SqlTypeEnum.NULL:
-                    s_values.append(v)
-                elif vtype == SqlTypeEnum.TEXT:
-                    s_values.append(self.quote_identifier(v))
-                elif vtype == SqlTypeEnum.INTEGER:
-                    s_values.append(v)
-                elif vtype == SqlTypeEnum.REAL:
-                    s_values.append(v)
-                elif v == SqlTypeEnum.BLOB:
-                    s_values.append(base64.b64encode(v))
-                else:
-                    log.error(self.logger, {
-                        "name"      : __name__,
-                        "method"    : "sqlite_sanitize_values",
-                        "column"    : str(c),
-                        "value"     : str(v),
-                        "sql_types" : str(self.sql_types),
-                        "ERROR"     : "Value type not in sql_types, not matched to SqlTypeEnum, data inconsistency",
-                        })
+                # could not find the type, which is weird b/c all the column types
+                # shoud be accounted for. so we can assume this is a strange
+                # error case...
+                log.warning(self.logger, {
+                    "name"      : __name__,
+                    "method"    : "sqlite_sanitize_values",
+                    "column"    : str(c),
+                    "value"     : str(v),
+                    "sql_types" : str(self.sql_types),
+                    })
+                _sani_by_type(SqlTypeEnum.type_of(v), v)
 
         return s_values
 

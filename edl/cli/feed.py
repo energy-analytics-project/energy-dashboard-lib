@@ -181,15 +181,16 @@ def reset(logger, feed, ed_path, stage):
     chlogger = logger.getChild(__name__)
     p = pre_reset(logger, feed, ed_path, stage)
     try:
-        shutil.rmtree(p)
-        log.debug(chlogger, {
-            "name"      : __name__,
-            "method"    : "reset",
-            "path"      : ed_path,
-            "feed"      : feed,
-            "target_dir": p,
-            "message"   : "removed target_dir",
-            })
+        if os.path.exists(p):
+            shutil.rmtree(p)
+            log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "reset",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target_dir": p,
+                "message"   : "removed target_dir",
+                })
     except Exception as e:
         log.critical(chlogger, {
             "name"      : __name__,
@@ -201,15 +202,16 @@ def reset(logger, feed, ed_path, stage):
             "exception" : str(e)
             })
     try:
-        os.makedirs(p)
-        log.debug(chlogger, {
-            "name"      : __name__,
-            "method"    : "reset",
-            "path"      : ed_path,
-            "feed"      : feed,
-            "target_dir": p,
-            "message"   : "makedirs target_dir",
-            })
+        if not os.path.exists(p):
+            os.makedirs(p)
+            log.debug(chlogger, {
+                "name"      : __name__,
+                "method"    : "reset",
+                "path"      : ed_path,
+                "feed"      : feed,
+                "target_dir": p,
+                "message"   : "makedirs target_dir",
+                })
     except Exception as e:
         log.critical(chlogger, {
             "name"      : __name__,
