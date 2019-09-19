@@ -582,7 +582,8 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
                 for sql in xst.insertion_sql():
                     sqllst.append(sql)
                 sqltext = "\n".join(sqllst)
-                db = sqlite3.connect("file::memory:?cache=shared")
+                #db = sqlite3.connect("file::memory:?cache=shared")
+                db = sqlite3.connect(":memory:")
                 db.executescript(sqltext)
                 # all good
                 outfh.write(sqltext)
