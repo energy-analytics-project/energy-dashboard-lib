@@ -117,3 +117,4 @@ sql/*.sql
 # NOT ENABLING THIS GIT IGNORE 
 # db/*.db 
 # NOT ENABLING THIS GIT IGNORE 
+*.db-journal

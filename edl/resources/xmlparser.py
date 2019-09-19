@@ -29,8 +29,9 @@ import pprint
 import re
 import sys
 import uuid
-import xmltodict
+#import xmltodict
 from edl.resources import log
+from edl.external import xmltodict
 
 class Walker(object):
     def __init__(self, logger, dict_handler_func=None, list_handler_func=None, item_handler_func=None):
@@ -281,27 +282,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         """
         Parse the loaded xmlfile and load into the self.json object.
         """
-        blob = xmltodict.parse(self.xmlfile.read(), process_namespaces=False)
-        # walk the json and rename names w/o 'foo:bar' namespace prefixes.
-        def owalk(obj):
-            def rename(d):
-                new_dict = {}
-                for key, value in zip(d.keys(), d.values()):
-                    try:
-                        new_key = key[key.index(":") +1:]
-                    except:
-                        new_key = key
-                    new_dict[new_key] = d[key]
-                return new_dict
-            if isinstance(obj, dict):
-                obj = rename(obj)
-                for k, v in obj.items():
-                    obj[k] = owalk(v)
-            elif isinstance(obj, list):
-                for item in obj:
-                    item = owalk(item)
-            return obj
-        self.json = owalk(blob)
+        self.json = xmltodict.parse(self.xmlfile.read(), process_namespaces=True, strip_namespaces=True)
         if self.logger.isEnabledFor(logging.DEBUG):
             print(json.dumps(self.json, indent=4, sort_keys=True))
         # allow method chaining

@@ -14,11 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import json
 import logging
 import logging.config
 import os
-import json
 import sys
+import traceback
 
 LOGGING_LEVEL_STRINGS = {
             50 : "CRITICAL",
@@ -61,4 +62,6 @@ def error(logger, obj):
 def critical(logger, obj):
     if logger.isEnabledFor(logging.CRITICAL):
         logger.critical(json.dumps(obj))
+        tb = traceback.format_exc()
+        print(tb)
     sys.exit(1)
