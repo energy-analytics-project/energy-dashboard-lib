@@ -329,6 +329,10 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         for k,v in self.tables.items():
             if len(v.columns) == 0:
                 v.columns.add('id')
+        # post scan to convert NULL sql_types to TEXT
+        for k,v in self.sql_types.items():
+            if v == SqlTypeEnum.NULL:
+                self.sql_types[k] = SqlTypeEnum.TEXT
         for k,v in self.sql_types.items():
             log.debug(self.logger, {
                 "name"      : __name__,
@@ -480,10 +484,12 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
     def sqlite_sanitize_values(self, columns, values):
         def _sani_by_type(t, v):
             if v == None:
-                s_values.append("")
+                s_values.append("\"\"")
             else:
                 if t == SqlTypeEnum.NULL:
-                    s_values.append(self.quote_identifier(v))
+                    # should not have NULL types (these are converted to TEXT type
+                    # at the end of the initial scan)
+                    s_values.append("\"\"")
                 elif t == SqlTypeEnum.TEXT:
                     s_values.append(self.quote_identifier(v))
                 elif t == SqlTypeEnum.INTEGER:
