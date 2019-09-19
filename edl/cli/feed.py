@@ -27,6 +27,7 @@ import tarfile
 import re
 import requests
 import json
+import traceback
 
 STAGES  = ['download', 'unzip', 'parse', 'insert', 'save']
 DIRS    = ['zip', 'xml', 'sql', 'db']
@@ -118,13 +119,15 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date, d
             os.makedirs(os.path.join(new_feed_dir, d))
         return feed
     except Exception as e:
+        tb = traceback.format_exc()
         log.critical(chlogger, {
             "name"      : __name__,
             "method"    : "create",
             "path"      : ed_path,
             "feed"      : feed,
             "ERROR"     : "FAILED to create feed",
-            "exception" : str(e)
+            "exception" : str(e),
+            "trace":str(tb),
             })
         # return nothing
 

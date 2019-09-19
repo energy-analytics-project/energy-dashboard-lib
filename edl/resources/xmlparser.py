@@ -32,6 +32,7 @@ import uuid
 #import xmltodict
 from edl.resources import log
 from edl.external import xmltodict
+import sqlite3
 
 class Walker(object):
     def __init__(self, logger, dict_handler_func=None, list_handler_func=None, item_handler_func=None):
@@ -566,30 +567,34 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
             os.makedirs(output_dir)
         (base, ext) = os.path.splitext(xml_input_file_name)
         outfile = os.path.join(output_dir, "%s.sql" % (base))
+        infile  = os.path.join(input_dir, xml_input_file_name)
         total_ddl = 0
         total_sql = 0
         with open(outfile, 'w') as outfh:
-            with open(os.path.join(input_dir, xml_input_file_name), 'r') as infh:
+            with open(infile, 'r') as infh:
+                # all the work happens here
                 xst = XML2SQLTransormer(chlogger, infh).parse().scan_all(pk_exclusions)
-                for d in xst.ddl():
-                    outfh.write("%s\n" % d)
-                    total_ddl += 1
+                # check that the ddl and sql is correct
+                # if this fails then it means the ddl/sql combination is incorrect
+                sqllst = []
+                for ddl in xst.ddl():
+                    sqllst.append(ddl)
                 for sql in xst.insertion_sql():
-                    outfh.write("%s\n" % sql)
-                    total_sql += 1
+                    sqllst.append(sql)
+                sqltext = "\n".join(sqllst)
+                db = sqlite3.connect("file::memory:?cache=shared")
+                db.executescript(sqltext)
+                # all good
+                outfh.write(sqltext)
         log.info(chlogger, {
             "src":resource_name, 
             "action":"parse_file",
-            "infile": xml_input_file_name,
+            "infile": infile,
             "outfile":outfile,
-            "total_ddl":total_ddl,
-            "total_sql":total_sql
             })
         return xml_input_file_name
     except Exception as e:
-        #if chlogger.isEnabledFor(logging.DEBUG):
         tb = traceback.format_exc()
-        print(tb)
         log.error(chlogger, {
             "src":resource_name, 
             "action":"parse",
@@ -597,6 +602,7 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
             "msg":"parse failed",
             "ERROR" : "Failed to parse xml file",
             "exception": str(e),
+            "trace":str(tb),
             })
 
 if __name__ == "__main__":
