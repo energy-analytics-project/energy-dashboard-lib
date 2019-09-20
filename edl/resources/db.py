@@ -14,24 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""
-(edc-cli) toddg@beast:~/proj/energy-dashboard$ edc feed data-oasis-atl-ruc-zone-map proc insert
-{"ts":"09/18/2019 04:12:54 PM", "msg":{"name": "edl.resources.db", "src": "data-oasis-atl-ruc-zone-map", "method": "insert", "sql_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/sql", "db_dir": "/home/toddg/proj/energy-dashboard/data/data-oasis-atl-ruc-zone-map/db", "new_files": 99}}
-Traceback (most recent call last):
-  File "src/40_inse.py", line 98, in <module>
-    run(logger, m, config())
-  File "src/40_inse.py", line 78, in run
-    state_file)
-  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/state.py", line 22, in update
-    for item in generator:
-  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/db.py", line 34, in insert
-    yield insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, depth=0, max_depth=5)
-  File "/home/toddg/bin/anaconda3/envs/edc-cli/lib/python3.7/site-packages/edl/resources/db.py", line 56, in insert_file
-    with sqlite3.connect(os.path.join(db_dir, db_name)) as cnx:
-sqlite3.OperationalError: unable to open database file
-"""
-
-
 import os
 import logging
 import sqlite3
@@ -56,17 +38,16 @@ def insert(logger, resource_name, sql_dir, db_dir, new_files):
         yield insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, depth=0, max_depth=5)
 
 def insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, depth, max_depth):
-    chlogger = logger.getChild(__name__)
-    db_name = gen_db_name(resource_name, depth)
-    sql_file = os.path.join(sql_dir, sql_file_name)
+    chlogger    = logger.getChild(__name__)
+    db_name     = gen_db_name(resource_name, depth)
+    sql_file    = os.path.join(sql_dir, sql_file_name)
+    db_file     = os.path.join(db_dir, db_name)
     if depth > max_depth:
         log.error(chlogger, {
             "name"      : __name__,
             "src"       : resource_name, 
             "method"    : "insert",
-            "sql_dir"   : sql_dir,
-            "db_dir"    : db_dir,
-            "db_name"   : db_name,
+            "db_file"   : db_file,
             "file_idx"  : idx,
             "sql_file"  : sql_file,
             "depth"     : depth,
@@ -75,16 +56,14 @@ def insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, dept
             })
         return
         
-    with sqlite3.connect(os.path.join(db_dir, db_name)) as cnx:
+    with sqlite3.connect(os.path.join(db_file)) as cnx:
         try:
             with open(sql_file, 'r') as sf:
                 log.info(chlogger, {
                     "name"      : __name__,
                     "src"       : resource_name, 
                     "method"    : "insert",
-                    "sql_dir"   : sql_dir,
-                    "db_dir"    : db_dir,
-                    "db_name"   : db_name,
+                    "db_file"   : db_file,
                     "file_idx"  : idx,
                     "sql_file"  : sql_file,
                     "depth"     : depth,
@@ -95,9 +74,7 @@ def insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, dept
                     "name"      : __name__,
                     "src"       : resource_name, 
                     "method"    : "insert",
-                    "sql_dir"   : sql_dir,
-                    "db_dir"    : db_dir,
-                    "db_name"   : db_name,
+                    "db_file"   : db_file,
                     "file_idx"  : idx,
                     "sql_file"  : sql_file,
                     "depth"     : depth,
@@ -109,13 +86,11 @@ def insert_file(logger, resource_name, sql_dir, db_dir, sql_file_name, idx, dept
                 "name"      : __name__,
                 "src"       : resource_name, 
                 "method"    : "insert",
-                "sql_dir"   : sql_dir,
-                "db_dir"    : db_dir,
-                "db_name"   : db_name,
                 "file_idx"  : idx,
+                "db_file"   : db_file,
                 "sql_file"  : sql_file,
                 "depth"     : depth,
-                "ERROR":"insert sql_file failed",
+                "ERROR"     : "insert sql_file failed",
                 "exception": str(e),
                 })
             insert_file(logger, resource_name, sql_dir, db_dir, sql_file, idx, depth+1, max_depth)
