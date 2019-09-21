@@ -30,7 +30,7 @@ import json
 import traceback
 
 STAGES  = ['download', 'unzip', 'parse', 'insert', 'save']
-DIRS    = ['zip', 'xml', 'sql', 'db']
+DIRS    = ['zip', 'xml', 'sql', 'db', 'save']
 PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.py']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
@@ -88,7 +88,7 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date, d
                     "message"   : "rendered target"
                     })
 
-        hidden_files = ['gitignore', 'gitattributes']
+        hidden_files = ['gitignore']
         for hf in hidden_files:
             template    = env.get_template(hf)
             target      = os.path.join(new_feed_dir, ".%s" % hf)
@@ -169,8 +169,8 @@ def status(logger, feed, ed_path, separator, header):
                     "ERROR"     : "target_dir does not exist"
             })
     if header:
-        yield separator.join(["feed name","downloaded","unzipped","parsed", "inserted"])
-    txtfiles = ["zip/state.txt", "xml/state.txt", "sql/state.txt", "db/state.txt"]
+        yield separator.join(["feed name","downloaded","unzipped","parsed", "inserted", "databases"])
+    txtfiles = ["zip/state.txt", "xml/state.txt", "sql/state.txt", "db/state.txt", "save/state.txt"]
     counts = [str(lines_in_file(os.path.join(target_dir, f))) for f in txtfiles]
     status = [feed]
     status.extend(counts)
@@ -379,7 +379,7 @@ def archive_to_s3(logger, feed, ed_path, service, operation):
     feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     if operation == "copy":
-        cmd         = "rclone copy --verbose --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
+        cmd         = "rclone copy --verbose --checksum --no-traverse --no-update-modtime --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
     elif operation == "sync":
         cmd         = "rclone sync --verbose %s %s:%s" % (feed_dir, service, s3_dir)
     else:
@@ -404,7 +404,7 @@ def archive_to_s3(logger, feed, ed_path, service, operation):
         })
     return runyield([cmd], feed_dir)
 
-def restore_from_s3(logger, feed, ed_path, service):
+def restore_from_s3(logger, feed, ed_path, service, stage):
     """
     Restore feed from an S3 bucket.
 
@@ -412,8 +412,8 @@ def restore_from_s3(logger, feed, ed_path, service):
     have the entire bucket replicated here. I've not had any luck with
     that approach.
 
-    Here's the brute force solution. Use the download state file,
-    'xml/state.txt', to direct the download operations.  
+    Here's the brute force solution. Use the state files,
+    '[xml|sql|db]/state.txt', to direct the download operations.  
     """
     chlogger    = logger.getChild(__name__)
 
@@ -422,18 +422,21 @@ def restore_from_s3(logger, feed, ed_path, service):
             'wasabi'        : 's3.us-west-1.wasabisys.com'
     }
 
+    stages_idx  = STAGES.index(stage)
+    out_dir     = DIRS[stages_idx]
+    in_dir      = DIRS[stages_idx + 1]
     feed_dir    = os.path.join(ed_path, 'data', feed)
-    outdir      = os.path.join(feed_dir, 'zip')
+    state_file  = os.path.join(feed_dir, in_dir, 'state.txt')
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     try:
-        with open(os.path.join(feed_dir, 'xml', 'state.txt'), 'r') as zipfiles:
-            for zf in zipfiles:
-                zf = zf.rstrip()
-                s3_file = "%s/zip/%s" % (s3_dir, zf)
-                url = "https://%s/%s/zip/%s" % (endpoints[service], s3_dir, zf)
-                r = requests.get(url)
+        with open(state_file, 'r') as artifacts:
+            for a in artifacts:
+                a       = a.rstrip()
+                url     = "https://%s/%s/%s/%s" % (endpoints[service], s3_dir, out_dir, a)
+                target  = os.path.join(feed_dir, out_dir, a)
+                r       = requests.get(url)
                 if r.status_code == 200:
-                    with open(os.path.join(outdir, zf), 'wb') as fd:
+                    with open(target, 'wb') as fd:
                         for chunk in r.iter_content(chunk_size=128):
                             fd.write(chunk)
                     logger.info(chlogger, {
@@ -441,11 +444,11 @@ def restore_from_s3(logger, feed, ed_path, service):
                         "method"    : "restore_from_s3",
                         "feed"      : feed,
                         "path"      : ed_path,
-                        "feed_dir"  : feed_dir,
-                        "outdir"    : outdir,
-                        "s3_file"   : s3_file,
                         "service"   : service,
-                        "url"       : url
+                        "state_file": state_file,
+                        "url"       : url,
+                        "target"    : target,
+                        "message"   : "Restore succeeded",
                         })
                 else:
                     log.error(chlogger, {
@@ -453,11 +456,10 @@ def restore_from_s3(logger, feed, ed_path, service):
                         "method"    : "restore_from_s3",
                         "feed"      : feed,
                         "path"      : ed_path,
-                        "feed_dir"  : feed_dir,
-                        "outdir"    : outdir,
-                        "s3_file"   : s3_file,
+                        "state_file": state_file,
                         "service"   : service,
                         "url"       : url,
+                        "target"    : target,
                         "ERROR"     : "Failed to retrieve artifact from S3",
                         })
 
@@ -469,8 +471,8 @@ def restore_from_s3(logger, feed, ed_path, service):
                 "method"    : "restore_from_s3",
                 "feed"      : feed,
                 "path"      : ed_path,
+                "state_file": state_file,
                 "feed_dir"  : feed_dir,
-                "outdir"    : outdir,
                 "s3_dir"    : s3_dir,
                 "service"   : service,
                 "ERROR"     : "Failed to restore from S3",

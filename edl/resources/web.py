@@ -77,7 +77,7 @@ def download(logger, resource_name, delay, urls, state_file, path):
                 downloaded.append(url)
                 continue
             # url does not exist in manifest and the file does not exist on disk, download it
-            r = requests.get(url)
+            r = requests.get(url, verify=False, timeout=1)
             if r.status_code == 200:
                 with open(os.path.join(path, filename), 'wb') as fd:
                     for chunk in r.iter_content(chunk_size=128):
