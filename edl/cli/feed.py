@@ -355,6 +355,7 @@ def restore_locally(logger, feed, ed_path, archive):
                 "feed_dir"  : feed_dir,
                 "ERROR"     : "Must delete the feed_dir before restoring."
                 })
+        return
     else:
         try:
             tf.extractall(os.path.join(ed_path, 'data', feed))
@@ -379,7 +380,7 @@ def archive_to_s3(logger, feed, ed_path, service, operation):
     feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     if operation == "copy":
-        cmd         = "rclone copy --verbose --checksum --no-traverse --no-update-modtime --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
+        cmd         = "rclone copy --verbose --no-traverse --no-update-modtime --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
     elif operation == "sync":
         cmd         = "rclone sync --verbose %s %s:%s" % (feed_dir, service, s3_dir)
     else:
