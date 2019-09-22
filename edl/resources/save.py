@@ -14,7 +14,8 @@ def git_add_and_commit(logger, resource, db_dir, state_file):
             f.write("%s\n" % dbf)
 
     def do_git(cmd):
-        r = subprocess.run(cmd, shell=True)
+        cmd = " ".join(cmd)
+        os.system(cmd)
         log.info(logger, {
             "name"      : __name__,
             "method"    : "git_add_and_commit",
@@ -23,5 +24,5 @@ def git_add_and_commit(logger, resource, db_dir, state_file):
             })
 
     do_git(["git", "add",  "*"])
-    do_git(["git", "commit -am", "\"update state\""])
+    do_git(["git", "commit -am", "'update state'"])
     do_git(["git", "push"])
