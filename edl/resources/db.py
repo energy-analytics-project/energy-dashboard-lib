@@ -161,7 +161,7 @@ def insert_file(logger, resource_name, dbmgr, sql_dir, db_dir, sql_file_name, id
                 "dbmgr"     : str(dbmgr),
                 "message"   : "completed",
                 })
-        return sql_file
+        return sql_file_name
     except Exception as e:
         log.error(chlogger, {
             "name"      : __name__,
