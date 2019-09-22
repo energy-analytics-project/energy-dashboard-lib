@@ -175,7 +175,7 @@ def insert_file(logger, resource_name, dbmgr, sql_dir, db_dir, sql_file_name, id
             "ERROR"     : "insert sql_file failed",
             "exception": str(e),
             })
-        insert_file(logger, resource_name, sql_dir, db_dir, sql_file, idx, depth+1, max_depth)
+        insert_file(logger, resource_name, dbmgr, sql_dir, db_dir, sql_file, idx, depth+1, max_depth)
 
 def gen_db_name(resource_name, depth):
     return "%s_%02d.db" % (resource_name, depth)
