@@ -18,6 +18,7 @@ import os
 import logging
 import sqlite3
 from edl.resources import log
+from edl.resources import filesystem
 
 class MemDb():
     def __init__(self, db_path):
@@ -81,6 +82,7 @@ class DbMgr():
                 "db_path"   : k,
                 "message"   : "Closed in memory db",
                 })
+
     def __repr__(self):
         return str(self.dbs.keys())
 
@@ -102,6 +104,21 @@ def insert(logger, resource_name, sql_dir, db_dir, new_files):
             })
         for (idx, sql_file_name) in enumerate(new_files):
             yield insert_file(logger, resource_name, dbmgr, sql_dir, db_dir, sql_file_name, idx, depth=0, max_depth=5)
+       
+        save_dir        = os.path.join(os.path.dirname(db_dir), "save")
+        save_state_file = os.path.join(save_dir, "state.txt")
+        db_files        = filesystem.glob_dir(db_dir, ".db")
+        with open(save_state_file, 'w') as f:
+            for dbf in db_files:
+                f.write("%s\n" % dbf)
+                log.debug(logger, {
+                    "name"      : __name__,
+                    "method"    : "insert",
+                    "resource"  : resource_name,
+                    "db_file"   : dbf,
+                    "state_file": save_state_file,
+                    "message"   : "added db_file to state file",
+                    })
 
 def insert_file(logger, resource_name, dbmgr, sql_dir, db_dir, sql_file_name, idx, depth, max_depth):
     chlogger    = logger.getChild(__name__)

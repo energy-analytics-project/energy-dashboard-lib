@@ -29,9 +29,9 @@ import requests
 import json
 import traceback
 
-STAGES  = ['download', 'unzip', 'parse', 'insert', 'save']
-DIRS    = ['zip', 'xml', 'sql', 'db', 'save']
-PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.py']
+STAGES  = ['download', 'unzip', 'parse', 'insert', 'save', 'dist']
+DIRS    = ['zip', 'xml', 'sql', 'db', 'save', 'dist']
+PROCS   = ['10_down.py', '20_unzp.py', '30_pars.py', '40_inse.py', '50_save.py', '60_dist.sh']
 STAGE_DIRS = dict(zip(STAGES, DIRS))
 STAGE_PROCS = dict(zip(STAGES, PROCS))
 
@@ -55,7 +55,8 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date, d
         template_files = [
                 "LICENSE","Makefile","README.md",
                 "src/10_down.py","src/20_unzp.py","src/30_pars.py",
-                "src/40_inse.py", "src/50_save.py", "manifest.json"
+                "src/40_inse.py", "src/50_save.py", "src/60_dist.sh", 
+                "manifest.json"
                 ]
         env = Environment(
             loader=PackageLoader('edl', 'templates'),
@@ -372,49 +373,39 @@ def restore_locally(logger, feed, ed_path, archive):
                     "exception" : str(e)
                     })
 
-def archive_to_s3(logger, feed, ed_path, service, operation):
+def archive_to_s3(logger, feed, ed_path, service):
     """
-    Archive feed to an S3 bucket.
+    Archive feed dist to an S3 bucket.
     """
     chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    if operation == "copy":
-        cmd         = "rclone copy --verbose --include=\"*.zip\" --include=\"*.sql\" --include=\"*.db\" --include=\"*.txt\" %s %s:%s" % (feed_dir, service, s3_dir)
-    elif operation == "sync":
-        cmd         = "rclone sync --verbose %s %s:%s" % (feed_dir, service, s3_dir)
-    else:
-        log.critical(chlogger, {
-            "name"      : __name__,
-            "method"    : "archive_to_s3",
-            "path"      : ed_path,
-            "op"        : operation,
-            "feed"      : feed,
-            "s3_dir"    : s3_dir,
-            "cmd"       : cmd,
-            "ERROR"     : "unknown operation"
-            })
+    cmd         = "rclone sync --verbose %s/dist %s:%s" % (feed_dir, service, s3_dir)
     log.info(chlogger, {
             "name"      : __name__,
             "method"    : "archive_to_s3",
-            "path"      : ed_path,
-            "op"        : operation,
             "feed"      : feed,
+            "path"      : ed_path,
+            "service"   : service,
             "s3_dir"    : s3_dir,
             "cmd"       : cmd,
         })
     return runyield([cmd], feed_dir)
 
-def restore_from_s3(logger, feed, ed_path, service, stage):
+def s3_artifact_urls(logger, feed, ed_path, service):
     """
-    Restore feed from an S3 bucket.
+    Generate urls to access artifacts in S3 bucket.
 
     It'd be easy if we could simply 'rclone' from the S3 service and
     have the entire bucket replicated here. I've not had any luck with
     that approach.
 
     Here's the brute force solution. Use the state files,
-    '[xml|sql|db]/state.txt', to direct the download operations.  
+    '[xml|sql|db|save]/state.txt', to direct the download operations.  
+
+    Returns (url,target)
+    :url: source
+    :target: dest
     """
     chlogger    = logger.getChild(__name__)
 
@@ -422,59 +413,88 @@ def restore_from_s3(logger, feed, ed_path, service, stage):
             'digitalocean'  : 'sfo2.digitaloceanspaces.com',
             'wasabi'        : 's3.us-west-1.wasabisys.com'
     }
-
-    stages_idx  = STAGES.index(stage)
-    out_dir     = DIRS[stages_idx]
-    in_dir      = DIRS[stages_idx + 1]
-    feed_dir    = os.path.join(ed_path, 'data', feed)
-    state_file  = os.path.join(feed_dir, in_dir, 'state.txt')
-    s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    try:
+ 
+    def gen_url_target_tuples(stage):
+        stages_idx  = STAGES.index(stage)
+        out_dir     = DIRS[stages_idx]
+        in_dir      = DIRS[stages_idx + 1]
+        feed_dir    = os.path.join(ed_path, 'data', feed)
+        state_file  = os.path.join(feed_dir, in_dir, 'state.txt')
+        s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
         with open(state_file, 'r') as artifacts:
             for a in artifacts:
                 a       = a.rstrip()
-                url     = "https://%s/%s/%s/%s" % (endpoints[service], s3_dir, out_dir, a)
-                target  = os.path.join(feed_dir, out_dir, a)
-                r       = requests.get(url)
-                if r.status_code == 200:
-                    with open(target, 'wb') as fd:
-                        for chunk in r.iter_content(chunk_size=128):
-                            fd.write(chunk)
-                    logger.info(chlogger, {
-                        "name"      : __name__,
-                        "method"    : "restore_from_s3",
-                        "feed"      : feed,
-                        "path"      : ed_path,
-                        "service"   : service,
-                        "state_file": state_file,
-                        "url"       : url,
-                        "target"    : target,
-                        "message"   : "Restore succeeded",
-                        })
+                if stage == "download":
+                    url     = "https://%s/%s/%s/%s" % (endpoints[service], s3_dir, out_dir, a)
                 else:
-                    log.error(chlogger, {
-                        "name"      : __name__,
-                        "method"    : "restore_from_s3",
-                        "feed"      : feed,
-                        "path"      : ed_path,
-                        "state_file": state_file,
-                        "service"   : service,
-                        "url"       : url,
-                        "target"    : target,
-                        "ERROR"     : "Failed to retrieve artifact from S3",
-                        })
+                    # we don't upload the db directly, rather, we upload the p7zip file which is "name.7z"
+                    url     = "https://%s/%s/%s/%s.7z" % (endpoints[service], s3_dir, out_dir, a)
+                target  = os.path.join(feed_dir, out_dir, a)
+                yield (url,target)
 
-                # return downloaded urls
-                yield url
+    tuples = []
+    for stage in ['download', 'insert']:
+        for t in gen_url_target_tuples(stage):
+            tuples.append(t)
+    return tuples
+
+
+
+def restore_from_s3(logger, feed, ed_path, service):
+    """
+    Restore feed dist from an S3 bucket.
+
+    It'd be easy if we could simply 'rclone' from the S3 service and
+    have the entire bucket replicated here. I've not had any luck with
+    that approach.
+
+    Here's the brute force solution. Use the state files,
+    '[xml|sql|db|save]/state.txt', to direct the download operations.  
+
+    NOTE: This downloads and then uncompresses the .7z files in serial,
+    not in parallel. So this could be 
+    """
+    chlogger    = logger.getChild(__name__)
+    url_tuples = s3_artifact_urls(chlogger, feed, ed_path, service)
+    try:
+        for (url, target) in url_tuples:
+            r = requests.get(url)
+            if r.status_code == 200:
+                with open(target, 'wb') as fd:
+                    for chunk in r.iter_content(chunk_size=128):
+                        fd.write(chunk)
+                logger.info(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "restore_from_s3",
+                    "feed"      : feed,
+                    "path"      : ed_path,
+                    "service"   : service,
+                    "url"       : url,
+                    "target"    : target,
+                    "message"   : "Restore succeeded",
+                    })
+            else:
+                log.error(chlogger, {
+                    "name"      : __name__,
+                    "method"    : "restore_from_s3",
+                    "feed"      : feed,
+                    "path"      : ed_path,
+                    "service"   : service,
+                    "url"       : url,
+                    "target"    : target,
+                    "ERROR"     : "Failed to retrieve artifact from S3",
+                    })
+                target_parts = os.path.splitext(target)
+                if target_parts[1] == ".7z":
+                    subprocess.run("p7zip -d %s" % target)
+            # return downloaded urls
+            yield url
     except Exception as e:
         log.critical(chlogger, {
                 "name"      : __name__,
                 "method"    : "restore_from_s3",
                 "feed"      : feed,
                 "path"      : ed_path,
-                "state_file": state_file,
-                "feed_dir"  : feed_dir,
-                "s3_dir"    : s3_dir,
                 "service"   : service,
                 "ERROR"     : "Failed to restore from S3",
                 "exception" : str(e)
