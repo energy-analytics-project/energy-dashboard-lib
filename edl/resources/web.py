@@ -18,13 +18,15 @@
 web.py : download resources from a URL
 """
 
-import pdb
-import requests
-import os
-import time
-import logging
 from edl.resources import filesystem
 from edl.resources import log
+from stat import S_IREAD, S_IRGRP, S_IROTH
+import logging
+import os
+import pdb
+import requests
+import time
+import traceback
 
 def generate_urls(logger, date_pairs, url_template, date_format="%Y%m%d"):
     """
@@ -71,21 +73,28 @@ def download(logger, resource_name, delay, urls, state_file, path):
             if url in prev_downloaded:
                 log.debug(chlogger, {"src":resource_name, "action":'skip_download', "url":url, "file":filename, "msg":'url exists in download manifest'})
                 continue
-            if os.path.exists(filename):
+            target_file = os.path.join(path, filename)
+            if os.path.exists(target_file):
                 log.debug(chlogger, {"src":resource_name, "action":'skip_download', "url":url, "file":filename, "msg":'file exists locally, updating manifest'})
                 # update the state_file with files that were found on disk
                 downloaded.append(url)
                 continue
             r = requests.get(url)
             if r.status_code == 200:
-                with open(os.path.join(path, filename), 'wb') as fd:
+                with open(target_file, 'wb') as fd:
                     for chunk in r.iter_content(chunk_size=128):
                         fd.write(chunk)
                 downloaded.append(url)
+                # prevent file from being deleted
                 log.info(chlogger, {"src":resource_name, "action":'download', "url":url, "file":filename})
             else:
                 log.error(chlogger, {"src":resource_name, "action":'download', "url":url, "file":filename, "status_code":r.status_code, "ERROR":'http_request_failed'})
         except Exception as e:
-            log.error(chlogger, {"src":resource_name, "action":'download', "url":url, "ERROR": "http_request_failed", "exception" : str(e)})
+            log.error(chlogger, {"src":resource_name, "action":'download', "url":url, "ERROR": "http_request_failed", "exception" : str(e), "traceback": str(tb = traceback.format_exc())})
+        
+        # TODO: this is such a hack
         time.sleep(delay)
+        # ensure that all files in the download directery are read only
+        for f in filesystem.glob_dir(path, ".zip"):
+            os.chmod(os.path.join(path, f), S_IREAD|S_IRGRP|S_IROTH)
     return downloaded
