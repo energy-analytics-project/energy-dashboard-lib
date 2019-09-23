@@ -427,8 +427,8 @@ def s3_artifact_urls(logger, feed, ed_path, service):
                 if stage == "download":
                     url     = "https://%s/%s/%s/%s" % (endpoints[service], s3_dir, out_dir, a)
                 else:
-                    # we don't upload the db directly, rather, we upload the p7zip file which is "name.7z"
-                    url     = "https://%s/%s/%s/%s.7z" % (endpoints[service], s3_dir, out_dir, a)
+                    # we don't upload the db directly, rather, we upload the pigz (.gz) file which is "name.gz"
+                    url     = "https://%s/%s/%s/%s.gz" % (endpoints[service], s3_dir, out_dir, a)
                 target  = os.path.join(feed_dir, out_dir, a)
                 yield (url,target)
 
@@ -450,9 +450,6 @@ def restore_from_s3(logger, feed, ed_path, service):
 
     Here's the brute force solution. Use the state files,
     '[xml|sql|db|save]/state.txt', to direct the download operations.  
-
-    NOTE: This downloads and then uncompresses the .7z files in serial,
-    not in parallel. So this could be 
     """
     chlogger    = logger.getChild(__name__)
     url_tuples = s3_artifact_urls(chlogger, feed, ed_path, service)
@@ -485,8 +482,8 @@ def restore_from_s3(logger, feed, ed_path, service):
                     "ERROR"     : "Failed to retrieve artifact from S3",
                     })
                 target_parts = os.path.splitext(target)
-                if target_parts[1] == ".7z":
-                    subprocess.run("p7zip -d %s" % target)
+                if target_parts[1] == ".gz":
+                    subprocess.run("pigz -d %s" % target)
             # return downloaded urls
             yield url
     except Exception as e:
