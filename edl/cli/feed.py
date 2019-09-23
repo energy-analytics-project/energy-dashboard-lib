@@ -379,7 +379,22 @@ def archive_to_s3(logger, feed, ed_path, service):
     """
     chlogger    = logger.getChild(__name__)
     feed_dir    = os.path.join(ed_path, 'data', feed)
+    dist_dir    = os.path.join(feed_dir, 'dist')
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
+    if not os.path.exists(dist_dir) \
+            or not os.path.exists(os.path.join(dist_dir, 'zip')) \
+            or not os.path.exists(os.path.join(dist_dir, 'db')):
+        log.error(chlogger, {
+                "name"      : __name__,
+                "method"    : "archive_to_s3",
+                "feed"      : feed,
+                "path"      : ed_path,
+                "dist_dir"  : dist_dir,
+                "service"   : service,
+                "s3_dir"    : s3_dir,
+                "ERROR"     : "One of dist_dir|dist_dir/zip|dist_dir/db does not exist",
+            })
+        sys.exit(1)
     cmd         = "rclone sync --verbose %s/dist %s:%s" % (feed_dir, service, s3_dir)
     log.info(chlogger, {
             "name"      : __name__,
