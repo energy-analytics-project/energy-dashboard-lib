@@ -25,7 +25,6 @@ def runyield(cmd, cwd):
         while process.poll() is None:
             data = reader.read()
             if len(data) > 0:
-                yield reader.read()
+                yield data
             time.sleep(0.1)
         yield reader.read()
-
