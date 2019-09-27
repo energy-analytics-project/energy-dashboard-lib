@@ -31,7 +31,7 @@ def new_files(resource_name, state_file, path, ending):
         "action":"new_%s_files" % ending})
     if os.path.exists(state_file):
         with open(state_file, 'r') as m:
-            processed_file_set = set([l.rstrip() for l in m])
+            processed_file_set = set([l.lstrip().rstrip() for l in m])
     existing_file_set = set(filesystem.glob_dir(path, ending))
     new_file_set = existing_file_set - processed_file_set
     logging.info({

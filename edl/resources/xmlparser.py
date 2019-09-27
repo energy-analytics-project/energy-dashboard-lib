@@ -557,54 +557,68 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         return parent
 
 def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusions):
-    for f in input_files:
-        yield parse_file(logger, resource_name, f, input_dir, output_dir, pk_exclusions)
+    failed_state        = os.path.join(output_dir, 'failed.txt')
+    failed_input_files  = []
+
+    if os.path.exists(failed_state):
+        with open(failed_state, 'r') as fh:
+            failed_input_files = [l.rstrip().rstrip() for l in fh]
+
+    s_failed_input_files= set(failed_input_files) 
+    s_input_files       = set(input_files)
+    s_unprocessed_files = s_input_files - s_failed_input_files
+    unprocessed_files   = sorted(list(s_unprocessed_files))
+
+    with open(failed_state, 'a') as fh:
+        for f in unprocessed_files:
+            try:
+                yield parse_file(logger, resource_name, f, input_dir, output_dir, pk_exclusions)
+            except Exception as e:
+                fh.write("%s\n" % f)
+                tb = traceback.format_exc()
+                log.error(logger, {
+                    "src"       : resource_name, 
+                    "action"    : "parse",
+                    "xml_file"  : f,
+                    "msg"       : "parse failed",
+                    "ERROR"     : "Failed to parse xml file",
+                    "exception" : str(e),
+                    "trace"     : str(tb),
+                    })
 
 def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions):
     chlogger = logger.getChild(__name__)
-    try:
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        (base, ext) = os.path.splitext(xml_input_file_name)
-        outfile = os.path.join(output_dir, "%s.sql" % (base))
-        infile  = os.path.join(input_dir, xml_input_file_name)
-        total_ddl = 0
-        total_sql = 0
-        with open(outfile, 'w') as outfh:
-            with open(infile, 'r') as infh:
-                # all the work happens here
-                xst = XML2SQLTransormer(chlogger, infh).parse().scan_all(pk_exclusions)
-                # check that the ddl and sql is correct
-                # if this fails then it means the ddl/sql combination is incorrect
-                sqllst = []
-                for ddl in xst.ddl():
-                    sqllst.append(ddl)
-                for sql in xst.insertion_sql():
-                    sqllst.append(sql)
-                sqltext = "\n".join(sqllst)
-                #db = sqlite3.connect("file::memory:?cache=shared")
-                db = sqlite3.connect(":memory:")
-                db.executescript(sqltext)
-                # all good
-                outfh.write(sqltext)
-        log.info(chlogger, {
-            "src":resource_name, 
-            "action":"parse_file",
-            "infile": infile,
-            "outfile":outfile,
-            })
-        return xml_input_file_name
-    except Exception as e:
-        tb = traceback.format_exc()
-        log.error(chlogger, {
-            "src":resource_name, 
-            "action":"parse",
-            "xml_file":xml_input_file_name,
-            "msg":"parse failed",
-            "ERROR" : "Failed to parse xml file",
-            "exception": str(e),
-            "trace":str(tb),
-            })
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    (base, ext) = os.path.splitext(xml_input_file_name)
+    outfile = os.path.join(output_dir, "%s.sql" % (base))
+    infile  = os.path.join(input_dir, xml_input_file_name)
+    total_ddl = 0
+    total_sql = 0
+    with open(outfile, 'w') as outfh:
+        with open(infile, 'r') as infh:
+            # all the work happens here
+            xst = XML2SQLTransormer(chlogger, infh).parse().scan_all(pk_exclusions)
+            # check that the ddl and sql is correct
+            # if this fails then it means the ddl/sql combination is incorrect
+            sqllst = []
+            for ddl in xst.ddl():
+                sqllst.append(ddl)
+            for sql in xst.insertion_sql():
+                sqllst.append(sql)
+            sqltext = "\n".join(sqllst)
+            #db = sqlite3.connect("file::memory:?cache=shared")
+            db = sqlite3.connect(":memory:")
+            db.executescript(sqltext)
+            # all good
+            outfh.write(sqltext)
+    log.info(chlogger, {
+        "src":resource_name, 
+        "action":"parse_file",
+        "infile": infile,
+        "outfile":outfile,
+        })
+    return xml_input_file_name
 
 if __name__ == "__main__":
     infile = sys.argv[1]
