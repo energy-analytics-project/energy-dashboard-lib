@@ -382,10 +382,7 @@ def archive_to_s3(logger, feed, ed_path, service, bwlimit="100M"):
     feed_dir    = os.path.join(ed_path, 'data', feed)
     dist_dir    = os.path.join(feed_dir, 'dist')
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
-    if service == 'digitalocean':
-        cmd = "rclone copy --bwlimit=%s --no-update-modtime --verbose %s/dist %s:%s" % (bwlimit, feed_dir, service, s3_dir)
-    else:
-        cmd = "rclone sync --bwlimit=%s --verbose %s/dist %s:%s" % (bwlimit, feed_dir, service, s3_dir)
+    cmd = "rclone sync --bwlimit=%s --no-update-modtime --verbose %s/dist %s:%s" % (bwlimit, feed_dir, service, s3_dir)
     log.info(chlogger, {
             "name"      : __name__,
             "method"    : "archive_to_s3",
