@@ -278,7 +278,7 @@ def process_all_stages(logger, feed, ed_path):
 
 def process_stages(logger, feed, ed_path, stages):
     chlogger = logger.getChild(__name__)
-    stage_files = sorted([STAGE_PROCS[s] for s in stages])
+    stage_files = [STAGE_PROCS[s] for s in stages]
     for sf in stage_files:
         if sf in src_files(logger, feed, ed_path):
             yield process_file(logger, feed, ed_path, sf)
