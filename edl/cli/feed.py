@@ -374,7 +374,7 @@ def restore_locally(logger, feed, ed_path, archive):
                     "exception" : str(e)
                     })
 
-def archive_to_s3(logger, feed, ed_path, service):
+def archive_to_s3(logger, feed, ed_path, service, bwlimit="100M"):
     """
     Archive feed dist to an S3 bucket.
     """
@@ -383,9 +383,9 @@ def archive_to_s3(logger, feed, ed_path, service):
     dist_dir    = os.path.join(feed_dir, 'dist')
     s3_dir      = os.path.join('eap', 'energy-dashboard', 'data', feed)
     if service == 'digitalocean':
-        cmd = "rclone copy --no-update-modtime --verbose %s/dist %s:%s" % (feed_dir, service, s3_dir)
+        cmd = "rclone copy --bwlimit=%s --no-update-modtime --verbose %s/dist %s:%s" % (bwlimit, feed_dir, service, s3_dir)
     else:
-        cmd = "rclone sync --verbose %s/dist %s:%s" % (feed_dir, service, s3_dir)
+        cmd = "rclone sync --bwlimit=%s --verbose %s/dist %s:%s" % (bwlimit, feed_dir, service, s3_dir)
     log.info(chlogger, {
             "name"      : __name__,
             "method"    : "archive_to_s3",

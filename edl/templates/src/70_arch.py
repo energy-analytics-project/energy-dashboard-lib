@@ -35,9 +35,13 @@ import os
 def config():
     """
     config = {
+                "wasabi_bwlimit"        : [rclone] Bandwidth limit in kBytes/s, or use suffix b|k|M|G or a full timetable.
+                "digitalocean_bwlimit"  : [rclone] Bandwidth limit in kBytes/s, or use suffix b|k|M|G or a full timetable.
             }
     """
     config = {
+            "wasabi_bwlimit"        : "500K",
+            "digitalocean_bwlimit"  : "500K"            
             }
     return config
 
@@ -46,7 +50,9 @@ def config():
 # Entrypoint
 # -----------------------------------------------------------------------------
 def run(logger, manifest, config):
-    resource_name   = manifest['name']
+    resource_name           = manifest['name']
+    wasabi_bandwidth_limit  = config['wasabi_bwlimit']
+    digitalocean_bandwidth_limit = config['digitalocean_bwlimit']
     log.info(logger, {
         "name"      : __name__,
         "method"    : "run",
@@ -54,7 +60,7 @@ def run(logger, manifest, config):
         "message"   : "archiving...",
         })
     ed_path = os.path.dirname(os.path.dirname(os.path.abspath(os.curdir)))
-    for output in clifeed.archive_to_s3(logger, resource_name, ed_path, "wasabi"):
+    for output in clifeed.archive_to_s3(logger, resource_name, ed_path, "wasabi", wasabi_bandwidth_limit):
         log.info(logger, {
             "name"      : __name__,
             "method"    : "run",
@@ -62,7 +68,7 @@ def run(logger, manifest, config):
             "service"   : "wasabi",
             "stdout"   : str(output),
             })
-    for output in clifeed.archive_to_s3(logger, resource_name, ed_path, "digitalocean"):
+    for output in clifeed.archive_to_s3(logger, resource_name, ed_path, "digitalocean", digitalocean_bandwidth_limit):
         log.info(logger, {
             "name"      : __name__,
             "method"    : "run",
