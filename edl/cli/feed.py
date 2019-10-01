@@ -521,7 +521,6 @@ def scanner(logger, feed, ed_path, xmlfile):
         manifest    = os.path.join(feed_dir, 'manifest.json')
         with open(manifest, 'r') as f:
             obj = json.loads(f.read())
-        pk_exc = obj.pop('pk_exclusion', ['value'])
         if not xmlfile.startswith(xml_dir):
             xmlfile = os.path.join(xml_dir, xmlfile)
         logger.debug(chlogger, {
@@ -532,10 +531,9 @@ def scanner(logger, feed, ed_path, xmlfile):
             "feed_dir"  : feed_dir,
             "xml_dir"   : xml_dir,
             "xml_file"  : xml_file,
-            "pk_exc"    : pk_exc
             })
         with open(xmlfile, 'r') as f:
-            return xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables(pk_exc)
+            return xmlparser.XML2SQLTransormer(f).parse().scan_types().scan_tables()
     except Exception as e:
         log.critical(chlogger, {
             "name"      : __name__,
@@ -545,7 +543,6 @@ def scanner(logger, feed, ed_path, xmlfile):
             "feed_dir"  : feed_dir,
             "xml_dir"   : xml_dir,
             "xml_file"  : xml_file,
-            "pk_exc"    : pk_exc,
             "ERROR"     : "Failed to parse and scan xml_file",
             "exception" : str(e)
             })

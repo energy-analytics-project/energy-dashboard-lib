@@ -556,7 +556,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             return None
         return parent
 
-def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusions):
+def parse(logger, resource_name, input_files, input_dir, output_dir):
     failed_state        = os.path.join(output_dir, 'failed.txt')
     failed_input_files  = []
 
@@ -572,7 +572,7 @@ def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusio
     with open(failed_state, 'a') as fh:
         for f in unprocessed_files:
             try:
-                yield parse_file(logger, resource_name, f, input_dir, output_dir, pk_exclusions)
+                yield parse_file(logger, resource_name, f, input_dir, output_dir)
             except Exception as e:
                 fh.write("%s\n" % f)
                 tb = traceback.format_exc()
@@ -586,7 +586,7 @@ def parse(logger, resource_name, input_files, input_dir, output_dir, pk_exclusio
                     "trace"     : str(tb),
                     })
 
-def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir, pk_exclusions):
+def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir):
     chlogger = logger.getChild(__name__)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -598,7 +598,7 @@ def parse_file(logger, resource_name, xml_input_file_name, input_dir, output_dir
     with open(outfile, 'w') as outfh:
         with open(infile, 'r') as infh:
             # all the work happens here
-            xst = XML2SQLTransormer(chlogger, infh).parse().scan_all(pk_exclusions)
+            xst = XML2SQLTransormer(chlogger, infh).parse().scan_all()
             # check that the ddl and sql is correct
             # if this fails then it means the ddl/sql combination is incorrect
             sqllst = []
