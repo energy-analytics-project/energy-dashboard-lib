@@ -256,8 +256,8 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
     https://sqlite.org/foreignkeys.html
     https://docs.python.org/3/library/json.html
     """
-    NULL_MIGRATION = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT, SqlTypeEnum.BLOB]) 
-    BLOB_MIGRATION = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT]) 
+    NULL_MIGRATION  = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT, SqlTypeEnum.BLOB]) 
+    BLOB_MIGRATION  = set([SqlTypeEnum.REAL, SqlTypeEnum.INTEGER, SqlTypeEnum.TEXT]) 
     def __init__(self, logger, xmlfile):
         """
         Following 'Elegant Objects' style, constructor only sets vars. All
@@ -311,13 +311,16 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
                 # bad formatted xml with blanks or nulls or missing data will leave the item type as NULL
                 # when we know from later data that the type is actually more specific.
                 # so here we allow NULL to be upgraded to something else.
-                # allow NULL -> REAL, INTEGER, TEXT, BLOB
-                # allow BLOB -> REAl, INTEGER, TEXT
+                # allow NULL    -> REAL, INTEGER, TEXT, BLOB
+                # allow BLOB    -> REAl, INTEGER, TEXT
+                # allow INTEGER -> REAL
                 existing_type = self.sql_types[item_name]
                 new_type = SqlTypeEnum.type_of(obj)
                 if existing_type == SqlTypeEnum.NULL and new_type in XML2SQLTransormer.NULL_MIGRATION:
                     self.sql_types[item_name] = new_type
                 elif existing_type == SqlTypeEnum.BLOB and new_type in XML2SQLTransormer.BLOB_MIGRATION:
+                    self.sql_types[item_name] = new_type
+                elif existing_type == SqlTypeEnum.INTEGER and new_type == SqlTypeEnum.REAL:
                     self.sql_types[item_name] = new_type
             # add item to the table columns
             (child_name, obj, parent_name, pobj) = self.find_parent_child_tables(stack)
