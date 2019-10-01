@@ -58,7 +58,6 @@ def config():
 def run(logger, manifest, config):
     resource_name   = manifest['name']
     resource_url    = manifest['url']
-    pk_exclusions   = manifest.pop('pk_exclusions', ['value'])
     xml_dir         = config['source_dir']
     sql_dir         = config['working_dir']
     state_file      = config['state_file']
@@ -68,14 +67,13 @@ def run(logger, manifest, config):
         "method"    : "run",
         "resource"  : resource_name,
         "url"       : resource_url,
-        "pk_exclusions"   : pk_exclusions,
         "xml_dir"   : xml_dir,
         "sql_dir"   : sql_dir,
         "state_file": state_file,
         "new_files_count" : len(new_files),
         })
     state.update(
-            xmlparser.parse(logger, resource_name, new_files, xml_dir, sql_dir, pk_exclusions), 
+            xmlparser.parse(logger, resource_name, new_files, xml_dir, sql_dir), 
             state_file)
 
 # -----------------------------------------------------------------------------

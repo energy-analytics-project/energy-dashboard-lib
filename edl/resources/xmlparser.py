@@ -117,28 +117,26 @@ def sql_type_str(e):
     if e == SqlTypeEnum.BLOB: return "BLOB"
 
 class Table(object):
-    def __init__(self, name, parent, exclusions):
+    def __init__(self, name, parent):
         self.name = name
         """table name"""
 
         self.parent = parent
         """name parent of this table, e.g. where this table has foreign key references to"""
 
-        self.exclusions = set(exclusions)
-        """columns not to be included in the primary key"""
-        
-        self.columns = set()
+        self.columns = set(['id'])
         """columns in this table"""
 
         self.last_id = None
         """dirty hack to track last id of a list"""
 
     def primary_key(self):
-        """mutable: the primary key (all the local columns minus the exclusions, if any)"""
-        return list(self.columns - self.exclusions)
+        """primary key is always ['id']"""
+        assert 'id' in self.columns
+        return ['id']
 
     def __repr__(self):
-        return "name: %s, columns: %s, exclusions: %s, parent: %s, " % (self.name, self.columns, self.exclusions, self.parent)
+        return "name: %s, columns: %s, parent: %s, " % (self.name, self.columns, self.parent)
 
 class XML2SQLTransormer():
     """
@@ -291,7 +289,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
         # allow method chaining
         return self
 
-    def scan_all(self, exclusions):
+    def scan_all(self):
         """
         Recursive scan to build the types, tables, and table relations.
         """
@@ -300,7 +298,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
             if child_name == self.root:
                 return
             if child_name not in self.tables:
-                self.tables[child_name] = Table(name=child_name, parent=parent_name, exclusions=exclusions)
+                self.tables[child_name] = Table(name=child_name, parent=parent_name)
         def handle_item(stack):
             (item_name, obj) = stack[-1]
             if item_name not in self.sql_types:
@@ -331,8 +329,7 @@ odict_keys(['DATA_ITEM', 'RESOURCE_NAME', 'OPR_DATE', 'INTERVAL_NUM', 'INTERVAL_
 
         # post scan add 'id' to empty tables
         for k,v in self.tables.items():
-            if len(v.columns) == 0:
-                v.columns.add('id')
+            assert 'id' in v.columns
         # post scan to convert NULL sql_types to TEXT
         for k,v in self.sql_types.items():
             if v == SqlTypeEnum.NULL:
@@ -638,7 +635,7 @@ if __name__ == "__main__":
         "src"       : "xmlparser.py"
         })
     with open(infile, 'r') as f:
-        xst = XML2SQLTransormer(logger, f).parse().scan_all(['value'])
+        xst = XML2SQLTransormer(logger, f).parse().scan_all()
         for d in xst.ddl():
             print(d)
         for sql in xst.insertion_sql():
