@@ -8,7 +8,7 @@ def git_add_and_commit(logger, resource):
     """
     """
     for cmd in ["git add *", "git commit -am 'update state'", "git push"]:
-        log.debug(logger, {
+        log.info(logger, {
             "name"      : __name__,
             "method"    : "git_add_and_commit",
             "resource"  : resource,

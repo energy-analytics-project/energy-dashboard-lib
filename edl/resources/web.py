@@ -67,17 +67,22 @@ def download(logger, resource_name, delay, urls, state_file, path):
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             prev_downloaded = set([line.rstrip() for line in f])
+
+    status = {'manifest': 0, 'filesystem': 0, 'downloaded': 0, 'error': 0}
+
     for url in urls:
         try:
             filename = filesystem.url2filename(url)
             if url in prev_downloaded:
                 log.debug(chlogger, {"src":resource_name, "action":'skip_download', "url":url, "file":filename, "msg":'url exists in download manifest'})
+                status['manifest'] += 1
                 continue
             target_file = os.path.join(path, filename)
             if os.path.exists(target_file):
                 log.debug(chlogger, {"src":resource_name, "action":'skip_download', "url":url, "file":filename, "msg":'file exists locally, updating manifest'})
                 # update the state_file with files that were found on disk
                 downloaded.append(url)
+                status['filesystem'] += 1
                 continue
             r = requests.get(url)
             if r.status_code == 200:
@@ -85,16 +90,25 @@ def download(logger, resource_name, delay, urls, state_file, path):
                     for chunk in r.iter_content(chunk_size=128):
                         fd.write(chunk)
                 downloaded.append(url)
-                # prevent file from being deleted
-                log.info(chlogger, {"src":resource_name, "action":'download', "url":url, "file":filename})
+                status['downloaded'] += 1
+                log.debug(chlogger, {"src":resource_name, "action":'download', "url":url, "file":filename})
             else:
                 log.error(chlogger, {"src":resource_name, "action":'download', "url":url, "file":filename, "status_code":r.status_code, "ERROR":'http_request_failed'})
         except Exception as e:
             log.error(chlogger, {"src":resource_name, "action":'download', "url":url, "ERROR": "http_request_failed", "exception" : str(e), "traceback": str(tb = traceback.format_exc())})
-        
+            status['error'] += 1
         # TODO: this is such a hack
         time.sleep(delay)
         # ensure that all files in the download directery are read only
         for f in filesystem.glob_dir(path, ".zip"):
             os.chmod(os.path.join(path, f), S_IREAD|S_IRGRP|S_IROTH)
+        log.info(chlogger, {                                        \
+                "src"                   : resource_name,            \
+                "action"                : 'download',               \
+                "url"                   : url,                      \
+                'skipped_in_manifest'   : status['manifest'],       \
+                'skipped_in_filesystem' : status['filesystem'],     \
+                'downloaded'            : status['downloaded'],     \
+                'error'                 : status['error'],          \
+                })
     return downloaded
