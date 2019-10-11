@@ -54,7 +54,9 @@ def create(logger, ed_path, feed, maintainer, company, email, url, start_date, d
             "message"   : "created directory"
             })
         template_files = [
-                "LICENSE","Makefile","README.md",
+                "LICENSE",
+                "Makefile",
+                "README.md",
                 "src/10_down.py","src/20_unzp.py","src/30_pars.py",
                 "src/40_inse.py", "src/50_save.py", "src/60_dist.sh", 
                 "src/70_arch.py",
@@ -189,8 +191,10 @@ def prune(logger, feed, ed_path, stage):
     ending      = ".%s" % ext
     try:
         files = filesystem.glob_dir(p, ending)
+        count = 0
         for f in files:
             os.remove(os.path.join(p, f))
+            count += 1
         log.debug(chlogger, {
             "name"      : __name__,
             "method"    : "prune",
@@ -198,7 +202,7 @@ def prune(logger, feed, ed_path, stage):
             "feed"      : feed,
             "target_dir": p,
             "ending"    : ending,
-            "removed_count": len(files),
+            "removed"   : count,
             "message"   : "pruned target_dir",
             })
     except Exception as e:
