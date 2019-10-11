@@ -184,13 +184,13 @@ def pre_prune(logger, feed, ed_path, stage):
 
 def prune(logger, feed, ed_path, stage):
     chlogger    = logger.getChild(__name__)
-    path        = pre_prune(logger, feed, ed_path, stage)
+    p           = pre_prune(logger, feed, ed_path, stage)
     ext         = STAGE_DIRS[stage]
     ending      = ".%s" % ext
     try:
-        files = filesystem.glob_dir(path, ending)
+        files = filesystem.glob_dir(p, ending)
         for f in files:
-            os.remove(os.path.join(path, f))
+            os.remove(os.path.join(p, f))
         log.debug(chlogger, {
             "name"      : __name__,
             "method"    : "prune",
