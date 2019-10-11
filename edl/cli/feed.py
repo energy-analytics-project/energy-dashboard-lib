@@ -19,6 +19,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from pathlib import Path
 from shutil import make_archive, rmtree
 import edl.resources.log as log
+import edl.resources.filesystem as filesystem
 import os
 import shutil
 import stat
@@ -178,6 +179,39 @@ def status(logger, feed, ed_path, separator, header):
     status.extend(counts)
     yield separator.join(status)
 
+def pre_prune(logger, feed, ed_path, stage):
+    return os.path.join(ed_path, 'data', feed, STAGE_DIRS[stage])
+
+def prune(logger, feed, ed_path, stage):
+    chlogger    = logger.getChild(__name__)
+    path        = pre_prune(logger, feed, ed_path, stage)
+    ext         = STAGEDIRS[stage]
+    ending      = ".%s" % ext
+    try:
+        files = filesystem.glob_dir(path, ending)
+        for f in files:
+            os.remove(os.path.join(path, f))
+        log.debug(chlogger, {
+            "name"      : __name__,
+            "method"    : "prune",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "ending"    : ending,
+            "removed_count": len(files),
+            "message"   : "pruned target_dir",
+            })
+    except Exception as e:
+        log.critical(chlogger, {
+            "name"      : __name__,
+            "method"    : "prune",
+            "path"      : ed_path,
+            "feed"      : feed,
+            "target_dir": p,
+            "ending"    : ending,
+            "ERROR"     : "failed to prune target_dir",
+            "exception" : str(e)
+            })
 
 def pre_reset(logger, feed, ed_path, stage):
     return os.path.join(ed_path, 'data', feed, STAGE_DIRS[stage])
