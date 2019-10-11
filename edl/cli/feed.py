@@ -185,7 +185,7 @@ def pre_prune(logger, feed, ed_path, stage):
 def prune(logger, feed, ed_path, stage):
     chlogger    = logger.getChild(__name__)
     path        = pre_prune(logger, feed, ed_path, stage)
-    ext         = STAGEDIRS[stage]
+    ext         = STAGE_DIRS[stage]
     ending      = ".%s" % ext
     try:
         files = filesystem.glob_dir(path, ending)
