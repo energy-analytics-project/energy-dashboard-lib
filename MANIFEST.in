@@ -1,4 +1,4 @@
 include LICENSE
 include CHANGELOG.md
 graft edl/templates
-graft edl/config *
+graft edl/config
