@@ -55,7 +55,7 @@ def generate_urls(logger, date_pairs, url_template, date_format="%Y%m%d"):
 
 
 
-def download(logger, resource_name, delay, urls, state_file, path):
+def download(logger, resource_name, delay, urls, state_file, path, ending=".zip"):
     """
     urls        : list of urls to download
     state_file  : list of urls that have already been downloaded
@@ -72,7 +72,7 @@ def download(logger, resource_name, delay, urls, state_file, path):
 
     for url in urls:
         try:
-            filename = filesystem.url2filename(url)
+            filename = filesystem.url2filename(url, ending=ending)
             if url in prev_downloaded:
                 log.debug(chlogger, {"src":resource_name, "action":'skip_download', "url":url, "file":filename, "msg":'url exists in download manifest'})
                 status['manifest'] += 1
@@ -100,7 +100,7 @@ def download(logger, resource_name, delay, urls, state_file, path):
         # TODO: this is such a hack
         time.sleep(delay)
         # ensure that all files in the download directery are read only
-        for f in filesystem.glob_dir(path, ".zip"):
+        for f in filesystem.glob_dir(path, ending):
             os.chmod(os.path.join(path, f), S_IREAD|S_IRGRP|S_IROTH)
         log.info(chlogger, {                                        \
                 "src"                   : resource_name,            \

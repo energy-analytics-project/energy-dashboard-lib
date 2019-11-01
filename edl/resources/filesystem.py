@@ -26,6 +26,8 @@ BAD_S3_CHARS = ['&', '@', ':', ',', '$', '=', '+', '?', ';', ' ', '\\', '^', '>'
 # TODO: yes, there are replacement chars that are removed in the linter
 # TODO: need to sort this out after the migration
 COMMON_REPLACEMENTS = [
+    ("http://content.caiso.com/", "content_"),
+    ("http://oasis.caiso.com/oasisapi/", "oasis_"),
     ("http://oasis.caiso.com/oasisapi/", "oasis_"),
     ("http://zwrob.com/", ""),
     ("/", "_"),
@@ -68,7 +70,10 @@ def url2filename(url, rtuples = COMMON_REPLACEMENTS, ending = ".zip"):
     rtuples : list of (string, string) tuple replacements 
     """
     name = s3lint_file_name(shrink_file_name(url, rtuples))
-    return "%s%s" % (name, ending)
+    if not name.endswith(ending):
+        return "%s%s" % (name, ending)
+    else:
+        return name
 
 def clean_legacy_filename(name, ending=".zip"):
     """
